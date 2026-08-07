@@ -191,6 +191,47 @@ LiveTable은 4개 point에서 `x`와 `x_user_setpoint`가 각각
 `7dbc74f0`이었다. 실행 후 `RE.state=idle`, 위치 0, 완료/리미트/Disable 상태도 모두
 예상과 일치했다. Bluesky run 및 Event 문서 생성 경로를 확인했다.
 
+### 6. 이동 중 STOP과 MoveStatus 경쟁 조건
+
+축 1에서 기본 `EpicsMotor`로 목표 `10.0 mm` 이동을 시작하고 `MOVN=1`, `DMOV=0`을
+확인한 뒤 같은 Python 셀에서 `stop(success=False)`를 실행했다. 실제 축은
+`5.025 -> 5.053 mm`에서 정상 감속 정지했고 최종 `DMOV=1`, `MOVN=0`, `MSTA=16386`,
+`LVIO=0`, `_able=Enable`이었다. 하지만 진행 중이던 `MoveStatus`는
+`done=True`, `success=True`로 완료됐다.
+
+원인은 Ophyd 1.11.2 기본 `EpicsMotor.stop()`이 `.STOP`을 먼저 쓴 뒤
+`PositionerBase.stop(success=False)`를 호출하는 동안, 빠른 DMOV 완료 콜백이
+리미트/알람 없는 정지 상태를 먼저 성공으로 완료하는 경쟁 조건이다. IOC와 물리
+STOP의 오류가 아니며 기본 `EpicsMotor`는 목표값과 최종 위치를 비교해 성공을
+판정하지 않는다.
+
+단순히 처리 순서를 뒤집은 첫 시험은 `success=False`를 만들었지만 DMOV 콜백 재진입으로
+동일 Status를 두 번 완료하려는 `InvalidState` 예외가 발생했다. 따라서
+`kohzu_ophyd.SafeStopEpicsMotor`를 추가했다. 이 클래스는 활성 MoveStatus 완료 콜백을
+먼저 분리하고 motor record STOP을 전송한 다음 요청한 결과로 콜백을 정확히 한 번
+완료하며, STOP 처리와 DMOV 완료를 `RLock`으로 직렬화한다.
+
+Ophyd fake device 단위시험에서 다음 네 경우를 확인했다.
+
+- 정상 DMOV 완료: `success=True`
+- `stop(success=False)`: `success=False`
+- `stop(success=True)`: `success=True`
+- STOP과 동시 DMOV 완료: 명시적 STOP 결과 유지, 중복 완료 예외 없음
+
+새 시험 4개를 포함한 전체 Python 단위시험 23개가 통과했다.
+
+실제 축에서도 `SafeStopEpicsMotor`를 검증했다. 먼저 `6.0 mm` 정상 이동이
+`done=True`, `success=True`, `DMOV=1`, `MOVN=0`으로 완료됐다. 이어서 목표
+`10.0 mm` 이동 중 `stop(success=False)`를 실행해 `6.000 -> 6.025 mm`에서 감속
+정지했으며 Status는 `done=True`, `success=False`였다. 같은 조건의
+`stop(success=True)` 시험은 `6.025 -> 6.050 mm`에서 감속 정지하고 Status가
+`done=True`, `success=True`였다.
+
+두 STOP 시험 모두 명령 시점에 `DMOV=0`, `MOVN=1`이었고 최종 `DMOV=1`, `MOVN=0`,
+`MSTA=16386`, `LVIO=0`, `_able=Enable`이었다. Status 중복 완료 예외는 발생하지
+않았다. 따라서 실제 STOP 동작, 호출자가 지정한 Status 결과, 빠른 DMOV 콜백의 경쟁
+방지를 모두 확인했다.
+
 ## 최종 판정
 
 시험 진행 중.

@@ -191,6 +191,41 @@ x.move(0.1, wait=True, timeout=10)
 x.stop(success=False)
 ```
 
+### KOHZU STOP과 MoveStatus 경쟁 방지
+
+Ophyd 1.11.2의 기본 `EpicsMotor.stop()`은 motor record의 `.STOP`을 먼저 쓴 뒤
+진행 중인 `MoveStatus`를 호출자가 지정한 `success` 값으로 완료한다. KOHZU IOC가
+STOP 직후 `DMOV=1`을 매우 빠르게 게시하면 DMOV 콜백이 먼저 상태를
+`success=True`로 완료할 수 있다. 실제 정지와 `DMOV/MOVN`은 정상이지만
+`stop(success=False)`의 의미가 보존되지 않는 경쟁 조건이다.
+
+이 프로젝트는 STOP 처리와 DMOV 상태 완료만 직렬화하는 클래스를 제공한다.
+
+```python
+from kohzu_ophyd import SafeStopEpicsMotor
+
+x = SafeStopEpicsMotor("KOHZU:m1", name="x")
+x.wait_for_connection(timeout=5)
+```
+
+사용법은 `EpicsMotor`와 같다.
+
+```python
+status = x.set(1.0)
+x.stop(success=False)
+
+print(status.done)     # True
+print(status.success)  # False
+```
+
+이 클래스는 실제 `.STOP` 쓰기나 `DMOV`, `MOVN`, 위치 PV 갱신을 지연하지 않는다.
+정상 이동 완료에도 지연을 추가하지 않고, 같은 `MoveStatus`를 STOP 경로와 DMOV
+콜백이 동시에 완료하지 못하게 한다. `settle_time`은 성공 판정이 끝난 뒤 완료 통지를
+늦추는 속성이므로 이 경쟁 조건의 해결책이 아니다.
+
+구현은 Ophyd 1.11.2의 내부 subscription 자료구조를 사용하므로 Ophyd 버전을 변경할
+때 `tests/test_kohzu_ophyd_motor.py`를 반드시 다시 실행한다.
+
 Ophyd는 motor record의 소프트 리미트를 읽어 범위를 벗어난 목표를 거부할 수 있지만,
 이 기능을 물리 안전장치의 대체물로 사용하면 안 된다.
 
