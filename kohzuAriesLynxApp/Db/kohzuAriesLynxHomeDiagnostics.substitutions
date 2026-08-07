@@ -1,0 +1,36 @@
+file "db/kohzuAriesLynxHomeDiagnostics.template"
+{
+pattern {P, PORT, AXIS, ADDR, METHOD}
+{"$(PREFIX)", "$(MOTOR_PORT)", 1, 0, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 2, 1, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 3, 2, 10}
+{"$(PREFIX)", "$(MOTOR_PORT)", 4, 3, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 5, 4, 8}
+{"$(PREFIX)", "$(MOTOR_PORT)", 6, 5, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 7, 6, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 8, 7, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 9, 8, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 10, 9, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 11, 10, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 12, 11, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 13, 12, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 14, 13, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 15, 14, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 16, 15, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 17, 16, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 18, 17, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 19, 18, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 20, 19, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 21, 20, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 22, 21, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 23, 22, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 24, 23, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 25, 24, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 26, 25, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 27, 26, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 28, 27, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 29, 28, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 30, 29, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 31, 30, 4}
+{"$(PREFIX)", "$(MOTOR_PORT)", 32, 31, 4}
+}

@@ -1,0 +1,36 @@
+file "db/kohzuAriesLynxCommissioning.template"
+{
+pattern {P, AXIS}
+{"$(PREFIX)", 1}
+{"$(PREFIX)", 2}
+{"$(PREFIX)", 3}
+{"$(PREFIX)", 4}
+{"$(PREFIX)", 5}
+{"$(PREFIX)", 6}
+{"$(PREFIX)", 7}
+{"$(PREFIX)", 8}
+{"$(PREFIX)", 9}
+{"$(PREFIX)", 10}
+{"$(PREFIX)", 11}
+{"$(PREFIX)", 12}
+{"$(PREFIX)", 13}
+{"$(PREFIX)", 14}
+{"$(PREFIX)", 15}
+{"$(PREFIX)", 16}
+{"$(PREFIX)", 17}
+{"$(PREFIX)", 18}
+{"$(PREFIX)", 19}
+{"$(PREFIX)", 20}
+{"$(PREFIX)", 21}
+{"$(PREFIX)", 22}
+{"$(PREFIX)", 23}
+{"$(PREFIX)", 24}
+{"$(PREFIX)", 25}
+{"$(PREFIX)", 26}
+{"$(PREFIX)", 27}
+{"$(PREFIX)", 28}
+{"$(PREFIX)", 29}
+{"$(PREFIX)", 30}
+{"$(PREFIX)", 31}
+{"$(PREFIX)", 32}
+}

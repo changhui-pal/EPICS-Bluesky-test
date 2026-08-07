@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KOHZU Axis Panels</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header><h1>KOHZU Axis Panels</h1><p id="connection">설정 불러오는 중…</p></header>
+  <section class="creator">
+    <label>축 번호 <select id="axis"></select></label>
+    <label>스테이지 모델 <select id="model"></select></label>
+    <button id="create">패널 생성</button>
+  </section>
+  <section class="diagnostics">
+    <div class="panel-title"><h2>Controller 진단 및 복구</h2><span id="emergency"></span></div>
+    <dl id="diagnostic-values"></dl>
+    <div class="actions">
+      <button id="release-emg">원인 해결 후 EMG lock 해제 요청</button>
+      <button id="refresh-axes">Motionnet 축 구성 다시 읽기</button>
+    </div>
+    <p id="recovery-result"></p>
+  </section>
+  <main id="panels" aria-live="polite"></main>
+  <template id="panel-template">
+    <article class="panel">
+      <div class="panel-title"><h2></h2><button class="remove">패널 삭제</button></div>
+      <p class="model-warning"></p>
+      <dl class="values"></dl>
+      <section class="commissioning-controls">
+        <h3>사용자 commissioning 확인</h3>
+        <p>실제 장비를 관찰한 항목만 승인하십시오. 승인 취소는 축을 Disable합니다.</p>
+        <div class="confirmation-buttons">
+          <span>방향</span><button data-confirm="direction" data-value="true">확인</button><button data-confirm="direction" data-value="false">취소</button>
+          <span>센서</span><button data-confirm="sensors" data-value="true">확인</button><button data-confirm="sensors" data-value="false">취소</button>
+          <span>리미트</span><button data-confirm="limits" data-value="true">확인</button><button data-confirm="limits" data-value="false">취소</button>
+          <span>원점</span><button data-confirm="home" data-value="true">확인</button><button data-confirm="home" data-value="false">취소</button>
+        </div>
+      </section>
+      <div class="home-controls">
+        <label>Origin method <select class="origin-method"></select></label>
+        <button class="apply-origin">방법 적용(축 Disable)</button>
+        <button class="home">HOME</button>
+      </div>
+      <div class="actions">
+        <button class="enable">Guarded Enable</button>
+        <button class="disable">Disable</button>
+      </div>
+      <p class="result"></p>
+    </article>
+  </template>
+  <script src="app.js"></script>
+</body>
+</html>

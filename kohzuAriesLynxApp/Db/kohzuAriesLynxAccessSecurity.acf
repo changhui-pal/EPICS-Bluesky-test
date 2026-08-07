@@ -1,0 +1,12 @@
+# Default project records retain normal Channel Access read/write behavior.
+ASG(DEFAULT) {
+    RULE(1, READ)
+    RULE(1, WRITE)
+}
+
+# Motor enable records are readable for status displays but cannot be written
+# by any Channel Access client. IOC database links are not CA clients, so the
+# commissioning EnableAction/DisableAction records remain able to control them.
+ASG(KOHZU_INTERNAL_ENABLE) {
+    RULE(1, READ)
+}

@@ -1,0 +1,95 @@
+# Read-only controller-level ARIES error and warning diagnostics.
+# Waveforms avoid the 40-character limit of EPICS stringin records.
+record(longin, "$(P)Diag:LastErrorCode") {
+    field(DESC, "Last ARIES error code")
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0)LAST_ERROR_CODE")
+    field(SCAN, "I/O Intr")
+}
+record(waveform, "$(P)Diag:LastErrorText") {
+    field(DESC, "Last ARIES error meaning")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)LAST_ERROR_TEXT")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+record(waveform, "$(P)Diag:LastErrorCommand") {
+    field(DESC, "Command reporting error")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)LAST_ERROR_COMMAND")
+    field(FTVL, "CHAR")
+    field(NELM, "64")
+    field(SCAN, "I/O Intr")
+}
+record(waveform, "$(P)Diag:LastErrorRaw") {
+    field(DESC, "Raw ARIES error response")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)LAST_ERROR_RAW")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+record(longin, "$(P)Diag:LastWarningCode") {
+    field(DESC, "Last ARIES warning code")
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0)LAST_WARNING_CODE")
+    field(SCAN, "I/O Intr")
+}
+record(waveform, "$(P)Diag:LastWarningText") {
+    field(DESC, "Last ARIES warning meaning")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)LAST_WARNING_TEXT")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+record(waveform, "$(P)Diag:LastWarningCommand") {
+    field(DESC, "Command reporting warning")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)LAST_WARNING_COMMAND")
+    field(FTVL, "CHAR")
+    field(NELM, "64")
+    field(SCAN, "I/O Intr")
+}
+record(waveform, "$(P)Diag:LastWarningRaw") {
+    field(DESC, "Raw ARIES warning response")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)LAST_WARNING_RAW")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+# Recovery is deliberately explicit. REM performs a fresh all-axis STR
+# preflight in the driver; RAX is never issued merely because a cable returns.
+record(bi, "$(P)Recovery:EmergencyActive") {
+    field(DESC, "Any detected EMG input")
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),0)EMERGENCY_ACTIVE")
+    field(ZNAM, "Clear")
+    field(ONAM, "Active")
+    field(SCAN, "I/O Intr")
+}
+record(bo, "$(P)Recovery:ReleaseEMG") {
+    field(DESC, "Request guarded REM")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0)RECOVERY_REM_REQUEST")
+    field(ZNAM, "Idle")
+    field(ONAM, "Request")
+}
+record(bo, "$(P)Recovery:RefreshAxes") {
+    field(DESC, "Request Motionnet RAX")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),0)RECOVERY_RAX_REQUEST")
+    field(ZNAM, "Idle")
+    field(ONAM, "Request")
+}
+record(waveform, "$(P)Recovery:Status") {
+    field(DESC, "Recovery result and advice")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),0)RECOVERY_STATUS")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}

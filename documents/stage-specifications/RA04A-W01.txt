@@ -1,0 +1,380 @@
+システム
+製品
+System
+                 自動回転ステージ / テーブルサイズ Φ40,Φ49
+Products
+
+産業用
+                 Motorized Rotation Stages / Table Size Φ40,Φ49
+Industrial
+
+
+
+実験用
+Experi-
+mental
+
+
+手動精密
+ステージ
+Manual
+Stage
+
+X・XY
+X・XY
+
+
+
+Z
+Z                                                        RA04A-W01                                                                                    RA05A-W02
+
+回転
+Rotation                                                                                             ※画像のコネクターケーブルの長さは、実物と異なります。また曲げ半径は40mmとなります。
+                                                                                                     ※The length of the connector cable in the image is different from the actual one. The bending radius is 40mm.
+
+                RA04A-W01                                                     CCW CW
+スイベル
+（ゴニオ）
+                                                                                                             CW Limit Sensor
+Swivel                                                                                (R23.3)
+(Tilt)                                                                                                       CCW Limit Sensor
+                                                                                       LS dock
+                                                                      (0.5)
+
+
+
+
+                                                                                    turning radius                                (200)
+自動精密
+ステージ
+Motorized
+Stage
+                                                                   51.5
+                                                                 (57.5)
+
+
+
+
+X・XY
+X・XY
+
+
+
+Z                                                                       (2)
+Z                                                                                             (106)
+
+                                                                                φ40
+                                                                                                                                  (0.5)
+
+
+
+
+回転
+Rotation
+                                                                                                                                                          Table matrix
+                                                                                                                                  (28)
+                                                                 30
+
+
+
+
+                                                                                                                                                                    8-M2 Depth 3mm
+スイベル
+                                                                                                                                  (1.5)
+
+
+
+
+（ゴニオ）                                                                                                                                                                  φ4H8 Depth 4mm
+Swivel
+(Tilt)
+
+アライ                                                                                                                                       裏面
+メント                                                                                                                                       Back Side
+                                                                                                                                                          24
+                                                                                                                                                          13
+
+
+
+
+ステージ
+XYθ
+                                                                 32
+                                                                 30
+
+
+
+
+真空
+ステージ                                                                                                                                                                      13
+Vacuum
+                                                                                30              3-for M3 screws                                                           24
+Stage
+                                                                                32              Shaft length 4mm
+制御装置
+Control
+Electron-
+               RA05A-W02
+ics                                 CCW CW
+モーター
+コントローラ
+Motor
+Controller                                                       CW Limit Sensor                                                                                                                 裏面
+                           50
+
+
+
+
+                                                                                                                                                                                                 Back Side
+                              40
+
+
+
+
+                                                                 Home Position
+ドライバ
+                              □
+
+
+
+
+                                                                 CCW Limit Sensor                (200)
+ボックス
+Driver                                                             φ3.5
+Box
+                                                                                                                         (87.3)
+
+
+
+
+アプリ
+ケーション
+Applica-         (R33)
+tion            LS dock
+             turning radius
+モーター
+ドライバ
+Motor                               36                            (111)
+Driver                                                   (147)
+
+モーター
+ケーブル
+Motor                                                                                                                                           Table matrix
+Cable                                                                                                                                                                4-M3 Depth 6mm
+                                         φ49                                                                                                                            4-M2 Depth 6mm
+                                                                                                     (5.5)
+
+
+
+
+付録                                                                                                                                                                       φ6H8 Depth 4mm
+Appendix
+                                                                                                     (28)
+
+
+
+
+                                                                                                                                                 30
+                                                                                                                                                 13
+                40
+
+
+
+
+アクセ
+サリー
+                     9.9
+
+
+
+
+Accesso-
+ries
+                                                                                                     (6.5)
+
+
+
+
+                                    2-for M3 screws                                                                                                            13
+検査                                  Shaft length 6.9mm                                                                                                         30
+システム
+Inspection
+System
+
+J-006        CONTACT              TEL +81-44-981-2131/FAX +81-44-981-2181 【URL】www.kohzuprecision.com
+     アルミ / アンギュラベアリング / ウォーム＆ウォームホイール                                                                                                                                          システム
+                                                                                                                                                                               製品
+                                                                                                                                                                               System
+                                                                                                                                                                               Products
+     Aluminum Body / Angular Bearing / Worm and Worm Wheel                                                                                                                     産業用
+                                                                                                                                                                               Industrial
+                   型式
+                                                                  RA04A-W01                                                         RA05A-W02
+            Model Number
+             勝手違い型式                                                                                                                                                            実験用
+                                                                 RA04A-W01-R                                                       RA05A-W02-R                                 Experi-
+         Mirror Model Number
+                                                                                                                                                                               mental
+              テーブル面
+                                                                    Φ40mm                                                             Φ49mm
+               Table Size
+               案内方式                                                                           アンギュラベアリング                                                                       手動精密
+           Guide Mechanism                                                                     Angular Bearing                                                                 ステージ
+                                                                                                                                                                               Manual
+               回転範囲                                                                                                                                                            Stage
+                                                                     ±177°                                                             ±157°
+            Angular Range
+                送り方式                                                                   ウォーム＆ウォームホイール 1/90                                                                      X・XY
+                                                                                                                                                                               X・XY
+           Lead Mechanism                                                                Worm & Worm Wheel 1/90
+                   フル/ハーフ ステップ
+                                                                                                0.004°
+                                                                                                     /0.002°
+   分解能                 Full/Half Step
+           ※1                                                                                                                                                                  Z
+Resolution        マイクロステップ（1/20分割）
+                                                                                                    0.0002°                                                                    Z
+                   Micro Step (1/20 div)
+               最高速度
+                                                                                                    20°
+                                                                                                      /sec
+           Maximum Speed
+                                                                                                                                                                               回転
+               累積誤差
+                                                      ≦0.02°
+                                                           /360°
+                                                               （AVE. 0.0071°
+                                                                           /360°
+                                                                               ）                                       ≦0.02°
+                                                                                                                            /360°
+                                                                                                                                （AVE. 0.0063°
+                                                                                                                                            /360°
+                                                                                                                                                ）                              Rotation
+       Accumulated Lead Error
+            ロストモーション
+                                                            ≦0.02°
+                                                                 （AVE. 0.0046°
+                                                                             ）                                               ≦0.009°
+                                                                                                                                   （AVE. 0.0043°
+                                                                                                                                               ）
+              Lost Motion
+                                                                                                                                                                                スイベル
+              角度再現性                                                                                                                                                            （ゴニオ）
+                                                            ≦0.002°
+                                                                  （AVE. 0.0006°
+                                                                              ）                                              ≦0.002°
+                                                                                                                                   （AVE. 0.0004°
+                                                                                                                                               ）
+         Angular Repeatability                                                                                                                                                  Swivel
+              ピッチ誤差                                                                                                                                                             (Tilt)
+                                                         ≦0.02°
+                                                              /4°
+                                                                （AVE. 0.0045°
+                                                                            /4°
+                                                                              ）                                          ≦0.015°
+                                                                                                                               /4°
+                                                                                                                                 （AVE. 0.0033°
+                                                                                                                                             /4°
+                                                                                                                                               ）
+               Pitch Error
+                                                                                                                                                                               自動精密
+             バックラッシュ                                                                                                                                                           ステージ
+                                                            ≦0.001°
+                                                                  （AVE. 0.0004°
+                                                                              ）                                              ≦0.001°
+                                                                                                                                   （AVE. 0.0003°
+                                                                                                                                               ）
+                Backlash                                                                                                                                                       Motorized
+                 面振れ                                                                                                                                                           Stage
+                                                      ≦20μm/360°
+                                                               （AVE. 6.96μm/360°
+                                                                               ）                                       ≦20μm/360°
+                                                                                                                                （AVE. 3.14μm/360°
+                                                                                                                                                ）
+            Surface Runout
+                                                                                                                                                                               X・XY
+                   偏心                                                                                                                                                          X・XY
+                                                      ≦20μm/360°
+                                                               （AVE. 8.38μm/360°
+                                                                               ）                                        ≦5μm/360°
+                                                                                                                                （AVE. 3.44μm/360°
+                                                                                                                                                ）
+              Eccentricity
+            モーメント剛性
+                                                  0.9 arcsec/N・cm（AVE. 0.46 arcsec/N・cm）                         0.82 arcsec/N・cm（AVE. 0.56 arcsec/N・cm）
+        Moment Load Stiffness
+                                                                                                                                                                               Z
+              水平耐荷重                                                                                                                                                            Z
+                                                                                                 39.2N（4kgf）
+      Load Capacity (Horizontal)
+                   材質                                                                               アルミ合金
+                Material                                                                          Aluminum Alloy                                                               回転
+                   外観                                                                               白色仕上げ                                                                      Rotation
+                  Finish                                                                       Clear-Matt Anodizing
+                   自重
+                                                                     0.42kg                                                             0.7kg
+                 Weight                                                                                                                                                         スイベル
+                                                     PK524HPMB      （オリエンタルモーター:                                     PK525HPMB（オリエンタルモーター:                                     （ゴニオ）
+       5相ステッピングモーター                           定格電流 0.75A/相，     基本ステップ角 0.36°         , リード線5本）              定格電流 0.75A/相，      基本ステップ角 0.36°         , リード線5本）                 Swivel
+        5 Phase Stepper Motor              ※3             PK524HPMB(Oriental Motor:                                       PK525HPMB(Oriental Motor:                             (Tilt)
+                                              Phase Current 0.75A, Basic Step Angle 0.36°, 5-Leads)           Phase Current 0.75A, Basic Step Angle 0.36°, 5-Leads)            アライ
+            モーター軸径                                                                      Φ5mm オプションハンドル：A type                                                                  メント
+        Motor Shaft Diameter                                                        Φ5mm Conformance option handle: A type                                                     ステージ
+              コネクタ                                                                  丸形20ピン（ヒロセ: RP13A-12JG-20PC）                                                               XYθ
+             Connector                                                               20Pin Round (Hirose: RP13A-12JG-20PC)                                                     真空
+      ステージ結線タイプ                                                                                                                                                                ステージ
+                          ※2                                           V4                                                                 V3
+        Stage Wiring Type                                                                                                                                                      Vacuum
+           センサ基板型式                                                                                                                                                             Stage
+                                                                  F-113(LIMIT)                                            F-113(LIMIT), PM-L25(HOME)
+            Sensor Model                                                                                                                                                       制御装置
+       クリーングリス仕様型式                                                                                                                                                             Control
+                                                                 RA04A-W01-C                                                       RA05A-W02-C                                 Electron-
+ Clean Room Lubricant Model Number
+                                                                                                                                                                               ics
+         真空グリス仕様型式
+                                                                 RA04A-W01-V                                                       RA05A-W02-V
+   Vacuum Lubricant Model Number                                                                                                                                               モーター
+     ステージの検査はハーフステップで行っております。                                                                  力側軸端をカットしています
+                                                                                              出                                                                                コントローラ
+※1                                                                                      ※3                                                                                     Motor
+     Stage is inspected by half step setting.                                                 Cut off the edge of motor shaft's output side.
+                                                                                                                                                                               Controller
+     ステージ結線の詳細についてはN-018～N-019を参照して下さい。
+※2                                                                                                                                                                             ドライバ
+     Refer to page N-018~N-019 for stage wiring connection information.
+                                                                                                                                                                               ボックス
+                                                                                                                                                                               Driver
+ 標準仕様でクリーングリスを採用していないステージをクリーングリス仕様へ変更す                                                    対応するモーターコントローラ・ドライバについてはN-002ページを参照して下さい。                                           Box
+ る場合、型式末尾に“-C”が付きます。詳細はC-005ページをご参照ください。                                                   Refer to page N-002 for information on corresponding motor controller and driver.   アプリ
+ For stages that do not use clean grease as standard, the suffix “-C” is added to          対応するモーターケーブルについてはN-014～N-015ページを参照して下さい。                                            ケーション
+ the model number when specifying the clean grease option. For details, please             Refer to page N-014~N-015 for information on corresponding motor cable.             Applica-
+ refer to page C-005.                                                                                                                                                          tion
+                                                                                           お客様のご要望により製品の改造も承ります。詳しくは営業部までお問い合わせ下さい。
+ 真空グリス仕様の型式は末尾に“-V”が付きます。詳細についてはC-005ページを参                                                 We appreciate the product customizing. Contact us for further information.          モーター
+ 照して下さい。                                                                                                                                                                       ドライバ
+ Vacuum lubricant model has “-V” at the end of model number. Page C-005 for                アクセサリについてはO-001ページを参照して下さい。                                                         Motor
+ further information.                                                                      Refer to page O-001 for information on accessory.                                   Driver
+
+ モーター交換の詳細についてはC-004ページを参照して下さい。RA04A-                                                     オプションハンドルはO-008ページを参照して下さい。                                                         モーター
+ W01はモーター交換が出来ません。                                                                         Refer to page O-008 for information on Option Handle.                               ケーブル
+ Page C-004 for further information about motor change. RA04A-W01 is impossible            2相ステッピングモーター仕様も承ります。                                                                Motor
+ to change the motor.                                                                                                                                                          Cable
+                                                                                           2 phase stepper motor is available.
+                                                                                                                                                                               付録
+                                                                                                                                                                               Appendix
+
+
+
+                                                                                                                                                                               アクセ
+                                                                                                                                                                               サリー
+                                                                                                                                                                               Accesso-
+                                                                                                                                                                               ries
+
+                                                                                                                                                                               検査
+                                                                                                                                                                               システム
+                                                                                                                                                                               Inspection
+                                                                                                                                                                               System
+
+                                                               お問い合わせは＊TEL:044-981-2131／ FAX:044-981-2181 【URL】www.kohzu.co.jp                                                     J-007
+

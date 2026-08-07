@@ -1,0 +1,348 @@
+システム
+製品
+System
+                        自動X・XYステージ / テーブルサイズ 50×50
+Products
+
+産業用
+                        Motorized X, XY Linear Stages / Table Size 50×50
+Industrial
+
+
+
+実験用
+Experi-
+mental
+
+
+手動精密
+ステージ
+Manual
+Stage
+
+X・XY
+X・XY
+
+
+
+Z                                                  XA05A-R102                                                                              YA05A-R102
+Z
+                                                   XA05A-R202                                                                              YA05A-R202
+
+回転
+Rotation                                                                                            ※画像のコネクターケーブルの長さは、実物と異なります。また曲げ半径は40mmとなります。
+                                                                                                    ※The length of the connector cable in the image is different from the actual one. The bending radius is 40mm.
+                  XA05A-R102/R202
+                                                             (147.5)
+スイベル                                             (97.5)                          50
+                                                                                 40
+（ゴニオ）
+                                                                                 30
+Swivel                                                                           13
+(Tilt)
+
+自動精密
+ステージ
+Motorized
+                                                                                                13
+                                                                                                30
+                                                                                                40
+                                                                                                50
+
+
+
+
+                                                                                                                                                       4H8
+Stage
+
+
+
+
+                                                                                                                                  15
+X・XY
+X・XY
+                                                                                                            (15)
+
+
+
+
+                                 (200)
+
+
+Z                                                 4-M3 Depth 8mm                              4-M2 Depth 5mm              φ4H8 Depth 4mm              4.5    Depth 4mm
+                                                                                                                                                                             裏面
+Z                                                   4-M3 Depth 5mm                         M4 Depth 4mm                                        30                            Back Side
+                                                                        CCW           CW
+
+                                                                 Home Position             CCW Limit Sensor
+回転                                                         CW Limit Sensor
+                                                                                                      (4)
+
+
+
+
+Rotation
+                                    (28)
+
+
+
+
+                                                                                                      20
+
+
+
+
+スイベル
+                                                                                                      (4)
+
+
+
+
+（ゴニオ）                                             4-for M3 screws                □40
+Swivel                                            Shaft length 3.5mm
+(Tilt)
+
+アライ               YA05A-R102/R202
+メント
+ステージ                                              (147.5)
+XYθ
+                                           50                  (97.5)
+真空                                         40                                                                                                                                               30
+ステージ                                       30                                                                                                                                        4.5
+Vacuum
+Stage                                      13                                                                                                                            Depth 4mm                  φ4H8 Depth 4mm
+                                                                                            (200)
+制御装置
+                        (15)
+
+
+
+
+Control
+Electron-
+ics                                                                                                                                                                                                     15
+                                                                                                                                                                                           4H8
+
+
+
+
+モーター
+                        50
+                        40
+                        30
+                        13
+
+
+
+
+コントローラ
+Motor
+Controller
+              (162.5)
+
+
+
+
+ドライバ
+ボックス                                                 M4 Depth 4mm
+Driver
+Box                                                4-M2 Depth 5mm
+                                                                                                                                                                                                     裏面
+                        (97.5)
+
+
+
+
+                                                   4-M3 Depth 5mm                                                                                                                                    Back Side
+アプリ                                                4-M3 Depth 8mm
+ケーション
+Applica-
+tion
+
+モーター
+ドライバ
+Motor
+Driver
+                                                   (200)
+
+
+
+
+モーター
+ケーブル
+Motor
+Cable
+
+付録
+                         (4)
+
+
+
+
+Appendix
+                         20
+              (48)
+
+
+
+
+アクセ
+                                                                                       (28)
+                         20
+
+
+
+
+サリー
+Accesso-
+ries
+                         (4)
+
+
+
+
+                                           □40    4-for M3 screws
+検査                                               Shaft length 3.5mm
+システム
+Inspection
+System
+
+H-010        CONTACT              TEL +81-44-981-2131/FAX +81-44-981-2181 【URL】www.kohzuprecision.com
+     アルミ / クロスローラガイド / 研削ネジ, ボールネジ                                                                                                                                       システム
+                                                                                                                                                                         製品
+                                                                                                                                                                         System
+                                                                                                                                                                         Products
+     Aluminum Body / Cross-Roller Guide / Ground Screw, Ball Screw                                                                                                       産業用
+                                                                                                                                                                         Industrial
+                  型式
+                                              XA05A-R102                     YA05A-R102                      XA05A-R202                     YA05A-R202
+             Model Number
+             勝手違い型式                                                                                                                                                      実験用
+                              ※1            XA05A-R102-R                 YA05A-R102-RRR                     XA05A-R202-R                 YA05A-R202-RRR                  Experi-
+       Mirror Model Number
+                                                                                                                                                                         mental
+               テーブル面
+                                                                                            50mm×50mm
+               Table Size
+                                                                                                                                                                         手動精密
+                案内方式                                                                    精密クロスローラガイド
+                                                                                                                                                                         ステージ
+           Guide Mechanism                                                                Cross-Roller Guide
+                                                                                                                                                                         Manual
+                移動範囲                                                                                                                                                     Stage
+                                                                                               ±7.5mm
+             Motion Range
+                                                                                                                                                                         X・XY
+                送り方式                                    研削ネジ, リード 0.5mm                                               ボールネジ, リード 1.0mm                                   X・XY
+           Lead Mechanism                              Ground Screw, Lead 0.5mm                                        Ball Screw, Lead 1.0mm
+                  フル/ハーフ ステップ
+                                                           0.5μm/0.25μm                                                      1μm/0.5μm
+    分解能               Full/Half Step
+           ※2                                                                                                                                                            Z
+Resolution        マイクロステップ（1/20分割）
+                                                               0.025μm                                                         0.05μm                                    Z
+                  Micro Step (1/20 div)
+                最高速度
+                                                             2.5mm/sec                                                        5mm/sec
+           Maximum Speed                                                                                                                                                 回転
+            累積リード誤差                           ≦6μm/15mm                                                      ≦5μm/15mm                                                   Rotation
+                                                                             ≦6μm/15mm                                                      ≦5μm/15mm
+        Accumulated Lead Error           （AVE. 1.69μm/15mm）                                           （AVE. 1.43μm/15mm）
+          繰返し位置決め精度
+                                        ≦±0.3μm（AVE. ±0.05μm）                 ≦±0.3μm                ≦±0.2μm（AVE. ±0.04μm）                   ≦±0.2μm
+              Repeatability                                                                                                                                               スイベル
+            ロストモーション                                                                                                                                                     （ゴニオ）
+                                          ≦1μm（AVE. 0.43μm）                     ≦1μm                   ≦0.5μm（AVE. 0.18μm）                    ≦0.5μm
+              Lost Motion                                                                                                                                                 Swivel
+                                                                                                                                                                          (Tilt)
+                           水平                 ≦1μm/15mm                                                      ≦1μm/15mm
+                                                                             ≦1μm/15mm                                                      ≦1μm/15mm
+    真直度                 Horizontal       （AVE. 0.32μm/15mm）                                           （AVE. 0.29μm/15mm）                                                 自動精密
+ Straightness              垂直                 ≦1μm/15mm                                                      ≦1μm/15mm                                                   ステージ
+                                                                             ≦1μm/15mm                                                      ≦1μm/15mm
+                          Vertical       （AVE. 0.21μm/15mm）                                            （AVE. 0.2μm/15mm）                                                 Motorized
+                                                                                                                                                                         Stage
+             バックラッシュ
+                                          ≦1μm（AVE. 0.2μm）                      ≦1μm                   ≦0.2μm（AVE. 0.1μm）                     ≦0.2μm
+                Backlash                                                                                                                                                 X・XY
+             モーメント剛性                       0.31 arcsec/N・cm                                               0.31 arcsec/N・cm                                               X・XY
+                                ※3                                        0.61 arcsec/N・cm                                               0.61 arcsec/N・cm
+      Moment Load Stiffness             （AVE. 0.17 arcsec/N・cm）                                      （AVE. 0.18 arcsec/N・cm）
+               水平耐荷重
+                                               49N（5kgf）                     39.2N（4kgf）                      49N（5kgf）                     39.2N（4kgf）                  Z
+       Load Capacity (Horizontal)
+                  材質                                                                          アルミ合金                                                                      Z
+                Material                                                                    Aluminum Alloy
+                  外観                                                                          白色仕上げ
+                 Finish                                                                  Clear-Matt Anodizing                                                            回転
+                                                                                                                                                                         Rotation
+                  自重
+                                                 0.45kg                          0.9kg                          0.45kg                         0.9kg
+                 Weight
+                 直交度
+                                                 －                           ≦5μm/15mm                           －                          ≦5μm/15mm                     スイベル
+            Perpendicularity
+                                                                                                                                                                         （ゴニオ）
+       5相ステッピングモーター                                   PK523HPMB（オリエンタルモーター: 定格電流 0.75A/相，                       基本ステップ角 0.36°       , リード線5本）                             Swivel
+        5 Phase Stepper Motor                              PK523HPMB (Oriental Motor: Phase Current 0.75A, Basic Step Angle 0.36°, 5-Leads)                               (Tilt)
+             モーター軸径                                                               Φ5mm オプションハンドル：A type
+                                                                                                                                                                         アライ
+         Motor Shaft Diameter                                                  Φ5mm Conformance option handle: A type
+                                                                                                                                                                         メント
+                コネクタ                                                           丸形20ピン（ヒロセ: RP13A-12JG-20PC）                                                              ステージ
+               Connector                                                        20Pin Round (Hirose: RP13A-12JG-20PC)                                                    XYθ
+       ステージ結線タイプ
+                            ※4                                                                    V3                                                                     真空
+         Stage Wiring Type                                                                                                                                               ステージ
+            センサ基板型式                                                     F-116(HOME,LIMIT), 勝手違い: F-116R(HOME,LIMIT)                                                      Vacuum
+             Sensor Model                                                 F-116(HOME,LIMIT), Mirror Model: F-116R(HOME,LIMIT)                                            Stage
+        クリーングリス仕様型式                                                                                                                                                      制御装置
+                                            XA05A-R102-C                    YA05A-R102-C                     XA05A-R202                     YA05A-R202
+ Clean Room Lubricant Model Number                                                                                                                                       Control
+          真空グリス仕様型式                                                                                                                                                      Electron-
+                                            XA05A-R102-V                    YA05A-R102-V                    XA05A-R202-V                   YA05A-R202-V                  ics
+   Vacuum Lubricant Model Number
+     勝手違い、重ねの組勝手についてはH-005ページを参照して下さい。                                                   Xステージ単体のモーメント剛性はロール剛性となります。                                                     モーター
+※1                                                                                  ※3                                                                                   コントローラ
+     Refer to page H-005 for Information on Standard and Mirror Symmetr y                Moment Stiffness of single X stage is measured in Roll Direction.
+     Configuration.                                                                                                                                                      Motor
+                                                                                         ステージ結線の詳細についてはN-018〜N-019ページを参照して下さい。                                           Controller
+                                                                                    ※4
+     ステージの検査はハーフステップで行っております。                                                            Refer to page N-018~N-019 for stage wiring connection information.
+※2                                                                                                                                                                       ドライバ
+     Stage is inspected by half step setting.
+                                                                                                                                                                         ボックス
+                                                                                                                                                                         Driver
+ オーバーホール費に交換部品代は含まれません。詳細については15ページを参照し                                              対応するモーターコントローラ・ドライバについてはN-002ページを参照して下さい。                                           Box
+ て下さい。                                                                               Refer to page N-002 for information on corresponding motor controller and driver.   アプリ
+ RAdditional parts cost is not included on Overhaul cost. Refer to page 16 for       対応するモーターケーブルについてはN-014～N-015ページを参照して下さい。                                            ケーション
+ further information.                                                                Refer to page N-014~N-015 for information on corresponding motor cable.             Applica-
+                                                                                                                                                                         tion
+ 標準仕様でクリーングリスを採用していないステージをクリーングリス仕様へ変更す                                              お客様のご要望により製品の改造も承ります。詳しくは営業部までお問い合わせ下さい。
+ る場合、型式末尾に“-C”が付きます。詳細はC-005ページをご参照ください。                                             We appreciate the product customizing. Contact us for further information.          モーター
+ For stages that do not use clean grease as standard, the suffix “-C” is added to                                                                                        ドライバ
+ the model number when specifying the clean grease option. For details, please       アクセサリについてはO-001ページを参照して下さい。                                                         Motor
+ refer to page C-005.                                                                Refer to page O-001 for information on accessory.                                   Driver
+
+ 真空グリス仕様の型式は末尾に“-V”が付きます。詳細についてはC-005ページを参                                           オプションハンドルはO-008ページを参照して下さい。                                                         モーター
+ 照して下さい。                                                                             Refer to page O-008 for information on Option Handle.                               ケーブル
+ Vacuum lubricant model has “-V” at the end of model number. Page C-005 for          2相ステッピングモーター仕様も承ります。                                                                Motor
+ further information.                                                                                                                                                    Cable
+                                                                                     2 phase stepper motor is available.
+ モーター交換の詳細についてはC-004ページを参照して下さい。。                                                                                                                                        付録
+ Page C-004 for further information about motor change.                                                                                                                  Appendix
+
+
+
+                                                                                                                                                                         アクセ
+                                                                                                                                                                         サリー
+                                                                                                                                                                         Accesso-
+                                                                                                                                                                         ries
+
+                                                                                                                                                                         検査
+                                                                                                                                                                         システム
+                                                                                                                                                                         Inspection
+                                                                                                                                                                         System
+
+                                                             お問い合わせは＊TEL:044-981-2131／ FAX:044-981-2181 【URL】www.kohzu.co.jp                                                 H-011
+

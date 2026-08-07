@@ -1,0 +1,123 @@
+# DEVELOPMENT-ONLY COMMISSIONING AND LOCK PVS; NOT USED IN FINAL OPERATION.
+# These records are retained while Codex is developing and validating the
+# driver. They do not send ARIES commands; they only record development checks
+# and control the motor record's development-only _able lock. After driver and
+# Ophyd development is complete, comment out the commissioning substitutions
+# dbLoadTemplate line instead of exposing these PVs as an operational API.
+
+record(bo, "$(P)m$(AXIS):Commissioning:ConfigApplied") {
+    field(DESC, "Reviewed model config applied")
+    field(ZNAM, "Not applied")
+    field(ONAM, "Applied")
+}
+
+record(bo, "$(P)m$(AXIS):Commissioning:DirectionVerified") {
+    field(DESC, "Direction verified at low speed")
+    field(ZNAM, "Unverified")
+    field(ONAM, "Verified")
+}
+
+record(bo, "$(P)m$(AXIS):Commissioning:SensorsVerified") {
+    field(DESC, "Declared sensors verified")
+    field(ZNAM, "Unverified")
+    field(ONAM, "Verified")
+}
+
+record(bo, "$(P)m$(AXIS):Commissioning:LimitsVerified") {
+    field(DESC, "Safe LLM HLM verified")
+    field(ZNAM, "Unverified")
+    field(ONAM, "Verified")
+}
+
+record(bo, "$(P)m$(AXIS):Commissioning:HomeEstablished") {
+    field(DESC, "Origin established and checked")
+    field(ZNAM, "Unverified")
+    field(ONAM, "Verified")
+}
+
+record(calc, "$(P)m$(AXIS):Commissioning:Ready") {
+    field(DESC, "All guarded enable conditions")
+    field(INPA, "$(P)m$(AXIS):Commissioning:ConfigApplied CP")
+    field(INPB, "$(P)m$(AXIS):Commissioning:DirectionVerified CP")
+    field(INPC, "$(P)m$(AXIS):Commissioning:SensorsVerified CP")
+    field(INPD, "$(P)m$(AXIS):Commissioning:LimitsVerified CP")
+    field(INPE, "$(P)m$(AXIS).DMOV CP")
+    field(INPF, "$(P)m$(AXIS).MOVN CP")
+    # HOME confirmation is informational and no longer gates normal Enable.
+    field(CALC, "A&&B&&C&&D&&E&&!F")
+}
+
+# OriginMethod changes disable the axis and invalidate the optional operator
+# HOME confirmation. Method selection itself is the user's responsibility.
+record(bo, "$(P)m$(AXIS):Commissioning:InvalidateHomeRequest") {
+    field(DESC, "Disable and invalidate HOME")
+    field(ZNAM, "Idle")
+    field(ONAM, "Invalidate")
+    field(FLNK, "$(P)m$(AXIS):Commissioning:InvalidateHomeDisable")
+}
+
+record(calcout, "$(P)m$(AXIS):Commissioning:InvalidateHomeDisable") {
+    field(DESC, "Disable before HOME invalidation")
+    field(CALC, "1")
+    field(OUT, "$(P)m$(AXIS)_able PP")
+    field(FLNK, "$(P)m$(AXIS):Commissioning:ClearHomeEstablished")
+}
+
+record(calcout, "$(P)m$(AXIS):Commissioning:ClearHomeEstablished") {
+    field(DESC, "Clear operator HOME evidence")
+    field(CALC, "0")
+    field(OUT, "$(P)m$(AXIS):Commissioning:HomeEstablished.VAL NPP")
+    field(FLNK, "$(P)m$(AXIS):Commissioning:ResetInvalidateHomeRequest")
+}
+
+record(calcout, "$(P)m$(AXIS):Commissioning:ResetInvalidateHomeRequest") {
+    field(DESC, "Reset HOME invalidation")
+    field(CALC, "0")
+    field(OUT, "$(P)m$(AXIS):Commissioning:InvalidateHomeRequest.VAL NPP")
+}
+
+record(bo, "$(P)m$(AXIS):Commissioning:EnableRequest") {
+    field(DESC, "Request guarded motor enable")
+    field(ZNAM, "Idle")
+    field(ONAM, "Request")
+    field(FLNK, "$(P)m$(AXIS):Commissioning:EnableAction")
+}
+
+record(calcout, "$(P)m$(AXIS):Commissioning:EnableAction") {
+    field(DESC, "Enable only when stopped")
+    field(INPA, "$(P)m$(AXIS):Commissioning:EnableRequest NPP")
+    field(INPB, "$(P)m$(AXIS).DMOV NPP")
+    field(INPC, "$(P)m$(AXIS).MOVN NPP")
+    field(CALC, "(A&&B&&!C)?0:1")
+    field(OUT,  "$(P)m$(AXIS)_able PP")
+    field(OOPT, "Every Time")
+    field(FLNK, "$(P)m$(AXIS):Commissioning:ResetEnableRequest")
+}
+
+record(calcout, "$(P)m$(AXIS):Commissioning:ResetEnableRequest") {
+    field(DESC, "Reset guarded enable request")
+    field(CALC, "0")
+    # NPP avoids reprocessing EnableRequest and recursively following FLNK.
+    field(OUT, "$(P)m$(AXIS):Commissioning:EnableRequest.VAL NPP")
+}
+
+record(bo, "$(P)m$(AXIS):Commissioning:DisableRequest") {
+    field(DESC, "Request unconditional disable")
+    field(ZNAM, "Idle")
+    field(ONAM, "Request")
+    field(FLNK, "$(P)m$(AXIS):Commissioning:DisableAction")
+}
+
+record(calcout, "$(P)m$(AXIS):Commissioning:DisableAction") {
+    field(DESC, "Always set motor Disable=1")
+    field(CALC, "1")
+    field(OUT, "$(P)m$(AXIS)_able PP")
+    field(OOPT, "Every Time")
+    field(FLNK, "$(P)m$(AXIS):Commissioning:ResetDisableRequest")
+}
+
+record(calcout, "$(P)m$(AXIS):Commissioning:ResetDisableRequest") {
+    field(DESC, "Reset disable request")
+    field(CALC, "0")
+    field(OUT, "$(P)m$(AXIS):Commissioning:DisableRequest.VAL NPP")
+}

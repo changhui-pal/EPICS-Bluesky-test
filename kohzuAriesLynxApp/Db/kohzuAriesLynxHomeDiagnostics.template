@@ -1,0 +1,55 @@
+# Axis-specific user selection and controller readback.
+record(longout, "$(P)m$(AXIS):OriginMethod") {
+    field(DESC, "Select ARIES SYS.2")
+    field(DTYP, "asynInt32")
+    field(OUT,  "@asyn($(PORT),$(ADDR))SELECTED_HOME_METHOD")
+    field(DRVL, "1")
+    field(DRVH, "15")
+    field(VAL,  "$(METHOD=4)")
+}
+
+record(longin, "$(P)m$(AXIS):OriginMethodSelectedRBV") {
+    field(DESC, "Accepted ORG method selection")
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR))SELECTED_HOME_METHOD")
+    field(SCAN, "I/O Intr")
+}
+
+record(longin, "$(P)m$(AXIS):OriginMethodRBV") {
+    field(DESC, "Actual ARIES SYS.2")
+    field(DTYP, "asynInt32")
+    field(INP,  "@asyn($(PORT),$(ADDR))ACTUAL_HOME_METHOD")
+    field(SCAN, "I/O Intr")
+}
+
+# DEVELOPMENT-ONLY STATUS PVS.
+# Codex uses HomeStatus, MoveStatus and PositionStatus while the driver and
+# Ophyd integration are under development. They are not part of the final
+# user-facing interface. After development is complete, comment out these
+# three records (or stop loading a separate diagnostics template).
+record(waveform, "$(P)m$(AXIS):HomeStatus") {
+    field(DESC, "HOME preflight/result")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR))HOME_STATUS")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)m$(AXIS):MoveStatus") {
+    field(DESC, "MOVE preflight/result")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR))MOVE_STATUS")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}
+
+record(waveform, "$(P)m$(AXIS):PositionStatus") {
+    field(DESC, "SET position result")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT),$(ADDR))POSITION_STATUS")
+    field(FTVL, "CHAR")
+    field(NELM, "256")
+    field(SCAN, "I/O Intr")
+}

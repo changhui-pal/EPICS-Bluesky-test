@@ -1,0 +1,40 @@
+# Generic pulse-unit motor records for the maximum ARIES/LYNX axis count.
+# A later stage-model configuration step will replace MRES, EGU, limits,
+# velocity and acceleration with model-specific values.
+file "db/kohzuAsynMotor.template"
+{
+pattern
+{P, M, DTYP, PORT, ADDR, DESC, EGU, DIR, VELO, VBAS, ACCL, BDST, BVEL, BACC, MRES, PREC, DHLM, DLLM, INIT, RTRY}
+{"$(PREFIX)", "m1",  "asynMotor", "$(MOTOR_PORT)", 0,  "Unconfigured axis 1",  pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m2",  "asynMotor", "$(MOTOR_PORT)", 1,  "Unconfigured axis 2",  pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m3",  "asynMotor", "$(MOTOR_PORT)", 2,  "Unconfigured axis 3",  pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m4",  "asynMotor", "$(MOTOR_PORT)", 3,  "Unconfigured axis 4",  pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m5",  "asynMotor", "$(MOTOR_PORT)", 4,  "Unconfigured axis 5",  pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m6",  "asynMotor", "$(MOTOR_PORT)", 5,  "Unconfigured axis 6",  pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m7",  "asynMotor", "$(MOTOR_PORT)", 6,  "Unconfigured axis 7",  pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m8",  "asynMotor", "$(MOTOR_PORT)", 7,  "Unconfigured axis 8",  pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m9",  "asynMotor", "$(MOTOR_PORT)", 8,  "Unconfigured axis 9",  pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m10", "asynMotor", "$(MOTOR_PORT)", 9,  "Unconfigured axis 10", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m11", "asynMotor", "$(MOTOR_PORT)", 10, "Unconfigured axis 11", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m12", "asynMotor", "$(MOTOR_PORT)", 11, "Unconfigured axis 12", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m13", "asynMotor", "$(MOTOR_PORT)", 12, "Unconfigured axis 13", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m14", "asynMotor", "$(MOTOR_PORT)", 13, "Unconfigured axis 14", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m15", "asynMotor", "$(MOTOR_PORT)", 14, "Unconfigured axis 15", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m16", "asynMotor", "$(MOTOR_PORT)", 15, "Unconfigured axis 16", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m17", "asynMotor", "$(MOTOR_PORT)", 16, "Unconfigured axis 17", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m18", "asynMotor", "$(MOTOR_PORT)", 17, "Unconfigured axis 18", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m19", "asynMotor", "$(MOTOR_PORT)", 18, "Unconfigured axis 19", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m20", "asynMotor", "$(MOTOR_PORT)", 19, "Unconfigured axis 20", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m21", "asynMotor", "$(MOTOR_PORT)", 20, "Unconfigured axis 21", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m22", "asynMotor", "$(MOTOR_PORT)", 21, "Unconfigured axis 22", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m23", "asynMotor", "$(MOTOR_PORT)", 22, "Unconfigured axis 23", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m24", "asynMotor", "$(MOTOR_PORT)", 23, "Unconfigured axis 24", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m25", "asynMotor", "$(MOTOR_PORT)", 24, "Unconfigured axis 25", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m26", "asynMotor", "$(MOTOR_PORT)", 25, "Unconfigured axis 26", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m27", "asynMotor", "$(MOTOR_PORT)", 26, "Unconfigured axis 27", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m28", "asynMotor", "$(MOTOR_PORT)", 27, "Unconfigured axis 28", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m29", "asynMotor", "$(MOTOR_PORT)", 28, "Unconfigured axis 29", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m30", "asynMotor", "$(MOTOR_PORT)", 29, "Unconfigured axis 30", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m31", "asynMotor", "$(MOTOR_PORT)", 30, "Unconfigured axis 31", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+{"$(PREFIX)", "m32", "asynMotor", "$(MOTOR_PORT)", 31, "Unconfigured axis 32", pulse, Pos, 1000, 1, 0.2, 0, 100, 0.2, 1, 0, 134217727, -134217728, "", 0}
+}
