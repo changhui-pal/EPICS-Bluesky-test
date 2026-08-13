@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 
-from ophyd import EpicsMotor
+from ophyd import Component as Cpt, EpicsMotor, EpicsSignalRO
 
 
 class SafeStopEpicsMotor(EpicsMotor):
@@ -22,6 +22,9 @@ class SafeStopEpicsMotor(EpicsMotor):
     the explicit stop has detached and completed the active status.
     """
 
+    limit_violation = Cpt(EpicsSignalRO, ".LVIO", kind="omitted")
+    enabled = Cpt(EpicsSignalRO, "_able", kind="omitted")
+
     def __init__(self, *args, **kwargs):
         # A DMOV monitor may call _done_moving from another CA callback thread.
         # RLock also permits callbacks invoked by this class to query or
@@ -30,14 +33,22 @@ class SafeStopEpicsMotor(EpicsMotor):
         super().__init__(*args, **kwargs)
 
     def _done_moving(self, success=True, timestamp=None, value=None, **kwargs):
-        """Complete a move while excluding an in-progress explicit STOP."""
+        """Complete once while excluding STOP and duplicate DMOV callbacks."""
         with self._stop_completion_lock:
-            return super()._done_moving(
-                success=success,
-                timestamp=timestamp,
-                value=value,
-                **kwargs,
-            )
+            callbacks = list(self._callbacks[self._SUB_REQ_DONE].values())
+            self._reset_sub(self._SUB_REQ_DONE)
+            if success:
+                self._run_subs(
+                    sub_type=self.SUB_DONE, timestamp=timestamp, value=value, **kwargs
+                )
+            callback_kwargs = {
+                "obj": self,
+                "sub_type": self._SUB_REQ_DONE,
+                "success": success,
+                "timestamp": timestamp,
+            }
+            for callback in callbacks:
+                callback(**callback_kwargs)
 
     def stop(self, *, success=False):
         """Stop the motor and preserve the requested MoveStatus outcome."""

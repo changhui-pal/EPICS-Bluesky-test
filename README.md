@@ -54,6 +54,7 @@ ARIES/LYNX용 Model 3 드라이버
 - [`docs/07-real-controller-commissioning.md`](docs/07-real-controller-commissioning.md): 실제 controller 읽기 전용 확인과 시운전 기록
 - [`docs/08-ophyd-bluesky-basics.md`](docs/08-ophyd-bluesky-basics.md): Ophyd 설치, EPICS motor 연결 및 Bluesky 기초 사용법
 - [`docs/09-ophyd-bluesky-integration-log.md`](docs/09-ophyd-bluesky-integration-log.md): 실제 IOC와 Ophyd/Bluesky의 단계별 연동 시험 기록
+- [`docs/10-fixed-point-kinematics.md`](docs/10-fixed-point-kinematics.md): 5축 고정점 운동의 이상적 기구 모델, 변환식 및 시험 계획
 - [`documents/stage-specifications/`](documents/stage-specifications/): KOHZU 공식 모델 사양 PDF와 검토용 추출문
 
 ## 새 환경에서 IOC 설정, 빌드 및 실행
@@ -85,8 +86,9 @@ module 정의보다 뒤에 둔다.
 
 ### 2. Controller 주소와 PV prefix 설정
 
-[`iocBoot/iockohzuAriesLynx/st.cmd`](iocBoot/iockohzuAriesLynx/st.cmd)에서 controller
-생성과 DB load 행의 주석을 해제하고 환경에 맞게 수정한다.
+[`iocBoot/iockohzuAriesLynx/st.cmd`](iocBoot/iockohzuAriesLynx/st.cmd)는 검증된 실제
+controller 주소와 32축 DB load를 포함한다. 다른 환경에서는 주소와 prefix를 먼저
+검토해 수정한다.
 
 ```text
 drvAsynIPPortConfigure("KOHZU_TCP", "10.1.101.51:12321", 0, 0, 0)
@@ -174,16 +176,58 @@ python3 tools/stage_config_dry_run.py
 python3 tools/stage_config_apply.py --prefix KOHZU:
 ```
 
-모든 대상 축이 Disable 및 정지 상태일 때만 실제 적용한다.
+IOC 시작 직후 선택 모델을 실제 적용한다.
 
 ```bash
 python3 tools/stage_config_apply.py --prefix KOHZU: --apply
 ```
 
 이 도구는 모델이 할당된 축의 `DESC`, `EGU`, `DIR`, `MRES`, `LLM/HLM`, `VMAX`,
-`VELO`, `VBAS`, `ACCL`, `OriginMethod`를 적용하지만 축을 Enable하지 않는다. 현재
+`VELO`, `VBAS`, `ACCL`, `OriginMethod`를 `_able=Disable` 상태에서 적용한 뒤 해당 축을
+`_able=Enable`로 전환한다. 현재
 `enabled=false`는 운영 승인 상태이고, `model` 항목이 존재하는 축은 설정 준비 및 적용
 대상이다.
+
+commissioning PV, Ready flag와 access-security는 기본 학습용 end-to-end 프로파일에서
+사용하지 않는다. 이전 안전 실험은 소스에 opt-in 형태로 남겨 두었다.
+
+### 6. 고정점 궤적 검토 및 실행
+
+`tools/fixed_point_run.py`는 Yaw 테이블 표면 중심 기준의 고정점 좌표(mm), 목표
+Pitch/Yaw(deg), 실행 시간과 구간 수를 받는다. 기본은 snapshot을 읽고 연속 계산 목표와
+`MRES/OFF/DIR`로 양자화한 실행 목표만 출력하는 read-only 모드다.
+
+```bash
+conda activate kohzu-bluesky
+python tools/fixed_point_run.py \
+  --prefix KOHZU: \
+  --fixed-x 20 --fixed-y 0 --fixed-z 0 \
+  --target-pitch 0.1 --target-yaw 0.1 \
+  --duration 10 --intervals 100
+```
+
+출력된 궤적과 software limit를 확인한 뒤 같은 명령에 `--execute`를 추가하면 양자화된
+표본을 Ophyd/Bluesky로 실행한다. 기본 프로파일은 모델이 할당된 1~5축의 `_able=Enable`
+만 운전 gate로 사용하며 HOME이나 Enable을 자동 수행하지 않는다.
+
+```bash
+python tools/fixed_point_run.py \
+  --prefix KOHZU: \
+  --fixed-x 20 --fixed-y 0 --fixed-z 0 \
+  --target-pitch 0.1 --target-yaw 0.1 \
+  --duration 10 --intervals 100 --execute
+```
+
+이전 안전 실험의 Emergency/상태 검사, plan hash 승인과 실패 시 추가 STOP을 함께
+시험하려는 경우에만 `--safety-checks`와 해당 승인 option을 사용한다. 기본 실행은
+`EmergencyActive` PV를 연결하거나 요구하지 않는다.
+
+Python 전체 회귀시험은 같은 환경에서 다음과 같이 실행한다.
+
+```bash
+EPICS_CA_AUTO_ADDR_LIST=NO EPICS_CA_ADDR_LIST=127.0.0.1 \
+python -m pytest -q
+```
 
 ## 스테이지 모델 추가, 수정 및 삭제
 
@@ -294,8 +338,9 @@ CRLF 기반 TCP 프레이밍, 응답 파서, 비동기 `SYS` 분리, `IDN` 및 `
 구현되었다. `RDP`, `STR`, `ROG`로 실제 검출 축의 위치와 상태를 읽어 Model 3
 parameter와 최대 32개의 motor record에 반영한다. 시험 모델 5종의 M1 half-step
 사양은 catalog에 등록했지만 실제 축 배선·방향·원점 방법을 확인하지 않았으므로
-assignment와 mock IOC는 기본적으로 모두 `Disable` 상태다. 안전을 위해 production
-`st.cmd`의 TCP/controller 생성 줄은 주석 처리되어 있다. HOME은 guarded SYS.2/ORG,
+assignment와 mock IOC는 기본적으로 모두 `Disable` 상태다. production `st.cmd`도
+32축을 모두 Disable로 시작하고, 지정된 1~5축 모델은 별도 적용 도구로 반영한다.
+HOME은 guarded SYS.2/ORG,
 절대 위치 이동은 speed table 0 검증 후 APS에 연결했으며 STOP은 `STP<axis>/0` 정상
 감속 정지에 연결했다. JOG는 방향·리미트 검사 후 `FRP`에 연결했고 버튼 해제는
 `STP/0`을 사용한다. SET 모드의 좌표 보정은 정지·EMG 검사 후 `WRP`를 보내고
@@ -327,8 +372,9 @@ cd iocBoot/iockohzuAriesLynx
 ./tests/run_gui_integration.sh
 ```
 
-두 번째 시험은 별도 loopback ARIES와 모든 축이 Disable인 모의 IOC에서 guarded
-적용 도구를 실제 Channel Access로 호출한다. 5축 readback과 DISP 복원을 확인하고
+두 번째 시험은 별도 loopback ARIES와 모든 축이 Disable로 시작하는 모의 IOC에서
+적용 도구를 실제 Channel Access로 호출한다. 5축 설정 readback, 최종 Enable과 DISP
+복원을 확인하고
 WRP/APS/RPS/FRP/ORG/WTB/WSY/STP/REM이 전송되면 실패한다.
 
 localhost 동적 GUI 기반 실행:

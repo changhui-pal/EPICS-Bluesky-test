@@ -44,33 +44,26 @@ class StageConfigApplyTest(unittest.TestCase):
         self.assertEqual(axis3["LLM"], "-3.92")
         self.assertEqual(axis3[":OriginMethod"], "10")
 
-    def test_preflight_failure_makes_no_writes(self):
+    def test_development_preflight_failure_makes_no_writes(self):
         plan = APPLY.AxisPlan(1, "TEST", (("MRES", "0.001"),))
         client = FakeChannelAccess({
             "TEST:m1_able": "1", "TEST:m1.DMOV": "0",
             "TEST:m1.MOVN": "1",
             "TEST:m1:Commissioning:ConfigApplied": "0"})
         with self.assertRaisesRegex(ValueError, "require Disable"):
-            APPLY.apply_plans(client, "TEST:", [plan])
+            APPLY.apply_plans(
+                client, "TEST:", [plan], development_guards=True
+            )
         self.assertEqual(client.writes, [])
 
-    def test_apply_never_writes_enable_pv(self):
+    def test_basic_apply_writes_only_model_fields(self):
         plan = APPLY.AxisPlan(1, "TEST", (("MRES", "0.001"),))
-        client = FakeChannelAccess({
-            "TEST:m1_able": "1", "TEST:m1.DMOV": "1",
-            "TEST:m1.MOVN": "0",
-            **{f"TEST:m1:Commissioning:{flag}": "0"
-               for flag in APPLY.COMMISSIONING_FLAGS}})
+        client = FakeChannelAccess({"TEST:m1_able": "1"})
         APPLY.apply_plans(client, "TEST:", [plan])
-        self.assertEqual(client.writes[0],
-                         ("TEST:m1:Commissioning:InvalidateHomeRequest", "1"))
-        self.assertEqual(client.writes[1:6], [
-            (f"TEST:m1:Commissioning:{flag}", "0")
-            for flag in APPLY.COMMISSIONING_FLAGS])
-        self.assertEqual(client.writes[6:], [
+        self.assertEqual(client.writes, [
             ("TEST:m1.MRES", "0.001"),
-            ("TEST:m1:Commissioning:ConfigApplied", "1")])
-        self.assertNotIn("TEST:m1_able", [pv for pv, _ in client.writes])
+            ("TEST:m1_able", "0"),
+        ])
 
 
 if __name__ == "__main__":

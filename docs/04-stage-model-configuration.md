@@ -159,12 +159,13 @@ python3 tools/stage_config_apply.py --prefix KOHZU: --apply
 3. `_able=1`과 motor record의 SDIS를 유지하여 record processing 차단
 4. DESC, EGU, DIR, MRES, LLM/HLM, VMAX, VELO, VBAS, ACCL과 HOME method 적용
 5. 각 write를 즉시 readback 비교
-6. 축은 최종적으로 계속 Disable
+6. 기본 프로파일에서는 성공한 할당 축을 최종적으로 Enable
 
-SDIS가 계속 활성 상태이므로 MRES 등 설정 변경으로 motor record가 process되어 WRP나
-이동 요청을 만드는 것을 막는다. 다만 실제 적용 중 다른 운영자가 `_able`을 변경하지
-않도록 commissioning 작업 통제가 필요하다. 현재 production controller 생성이
-비활성이라 실제 `--apply`는 실행하지 않았다.
+설정값을 쓰는 동안에는 `_able=Disable`로 SDIS를 활성화하여 MRES 등 설정 변경이
+motor record 처리나 이동 요청으로 이어지지 않게 한다. 모든 readback이 일치한 뒤에만
+할당된 축을 `_able=Enable`로 바꾼다. HOME, ORG, 이동 및 controller 설정 명령은 보내지
+않는다. 과거 commissioning PV 기반 검사는 `--development-guards`에서만 보존하며 기본
+프로파일에서는 사용하지 않는다.
 
 실제 장비 없이 Channel Access 적용 경로를 검증하려면 다음을 실행한다.
 
@@ -173,11 +174,15 @@ SDIS가 계속 활성 상태이므로 MRES 등 설정 변경으로 motor record�
 ```
 
 시험은 `127.0.0.1:22322`의 별도 simulator와 `MOCK:` prefix만 사용한다. 실제
-`caget/caput`으로 5축 값을 적용하여 모델 field, OriginMethod 수락값과 `_able=1`을
+`caget/caput`으로 5축 값을 적용하여 모델 field, OriginMethod 수락값과 최종 `_able=0`을
 확인한다. simulator에는 polling read만 허용하고 controller write,
 이동 또는 정지 명령이 하나라도 나타나면 실패한다.
 
-## Commissioning 확인과 guarded Enable
+## 과거 commissioning/guarded Enable 실험
+
+아래 구조는 구현 이력과 향후 재검토를 위해 보존한 개발 실험이다. 현재 기본 IOC는
+commissioning DB와 access security를 로드하지 않으며, 모델 적용과 실제 운전은 `_able`
+하나만 사용한다.
 
 32축 각각에 모델 적용, 방향, 센서, 리미트, 원점 확인 PV와 이들의 논리 결과인
 `Commissioning:Ready`를 둔다. 현재 Ready는 모델, 방향, 센서, 리미트 확인과 motor

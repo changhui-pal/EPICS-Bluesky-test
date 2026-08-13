@@ -43,6 +43,16 @@ class SafeStopEpicsMotorTest(unittest.TestCase):
         self.assertTrue(status.done)
         self.assertTrue(status.success)
 
+    def test_duplicate_dmov_completion_is_ignored(self):
+        status = self.start_move()
+        self.motor.user_readback.sim_put(10.0)
+        self.motor.motor_is_moving.sim_put(0)
+        self.motor._done_moving(success=True)
+        self.motor._done_moving(success=True)
+
+        self.assertTrue(status.done)
+        self.assertTrue(status.success)
+
     def test_stop_false_fails_pending_move(self):
         status = self.start_move()
         self.motor.stop(success=False)

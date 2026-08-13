@@ -2,8 +2,9 @@
 """Prepare assigned motor records from the reviewed stage catalog.
 
 The default mode prints a plan and performs no Channel Access operations.
-Actual writes require ``--apply``. Even then, this tool never enables an axis
-and refuses the entire operation unless every target is disabled and stopped.
+Actual writes require ``--apply``. Basic apply requires the bootstrap lock,
+writes and verifies model fields, then enables every assigned axis. The old
+commissioning checks remain available only through ``--development-guards``.
 """
 
 import argparse
@@ -27,7 +28,7 @@ COMMISSIONING_FLAGS = (
 
 @dataclass(frozen=True)
 class AxisPlan:
-    """One fully validated, still-disabled motor-record configuration."""
+    """One fully validated motor-record configuration to apply."""
 
     axis: int
     model: str
@@ -87,9 +88,14 @@ class ChannelAccess:
             raise ValueError(f"caget/caput not found in {epics_bin}")
 
     def get(self, pv: str, numeric_enum: bool = False) -> str:
+        # Request enough floating-point digits to verify catalog values rather
+        # than the record's display PREC (for example 3.429608 vs 3.42961).
+        # This option does not alter string or enum output.
         command = [str(self.caget), "-t"]
         if numeric_enum:
             command.append("-n")
+        else:
+            command.extend(("-g", "12"))
         command.append(pv)
         result = subprocess.run(command, check=True, capture_output=True,
                                 text=True, timeout=5.0)
@@ -126,23 +132,34 @@ def require_disabled_and_stopped(client: ChannelAccess, prefix: str,
 
 
 def apply_plans(client: ChannelAccess, prefix: str,
-                plans: Sequence[AxisPlan]) -> None:
-    """Write and read back reviewed fields without changing motor enable."""
-    require_disabled_and_stopped(client, prefix, plans)
+                plans: Sequence[AxisPlan], *,
+                development_guards: bool = False) -> None:
+    """Write/read model fields; optionally retain the old commissioning guards."""
+    if development_guards:
+        require_disabled_and_stopped(client, prefix, plans)
+    else:
+        # Use the project's single operational _able lock while runtime model
+        # fields are injected. No commissioning flags participate.
+        for plan in plans:
+            pv = f"{prefix}m{plan.axis}_able"
+            if client.get(pv, numeric_enum=True) != "1":
+                raise ValueError(
+                    f"axis {plan.axis}: set _able=Disable before model apply"
+                )
     for plan in plans:
         record = f"{prefix}m{plan.axis}"
-        # _able stays at Disable=1, so SDIS prevents motor-record processing.
-        if client.get(f"{record}_able", numeric_enum=True) != "1":
-            raise ValueError(f"axis {plan.axis}: unexpectedly enabled before apply")
-        # Any model re-application invalidates earlier physical confirmations.
-        # ConfigApplied is asserted only after all field readbacks succeed.
-        client.put(f"{record}:Commissioning:InvalidateHomeRequest", "1")
-        for flag in COMMISSIONING_FLAGS:
-            pv = f"{record}:Commissioning:{flag}"
-            client.put(pv, "0")
-            if client.get(pv, numeric_enum=True) != "0":
-                raise ValueError(
-                    f"axis {plan.axis}: failed to reset commissioning {flag}")
+        # DEVELOPMENT SAFETY GUARDS (disabled by default): keep this path for
+        # later experiments without making commissioning PVs operational gates.
+        if development_guards:
+            if client.get(f"{record}_able", numeric_enum=True) != "1":
+                raise ValueError(f"axis {plan.axis}: unexpectedly enabled before apply")
+            client.put(f"{record}:Commissioning:InvalidateHomeRequest", "1")
+            for flag in COMMISSIONING_FLAGS:
+                pv = f"{record}:Commissioning:{flag}"
+                client.put(pv, "0")
+                if client.get(pv, numeric_enum=True) != "0":
+                    raise ValueError(
+                        f"axis {plan.axis}: failed to reset commissioning {flag}")
         for suffix, value in plan.fields:
             pv = (record + suffix if suffix.startswith(":")
                   else record + "." + suffix)
@@ -160,14 +177,18 @@ def apply_plans(client: ChannelAccess, prefix: str,
                 raise ValueError(
                     f"axis {plan.axis}: {suffix} readback {actual!r} "
                     f"does not match {value!r}")
-        if client.get(f"{record}_able", numeric_enum=True) != "1":
-            raise ValueError(
-                f"axis {plan.axis}: unexpectedly enabled during apply")
-        applied_pv = f"{record}:Commissioning:ConfigApplied"
-        client.put(applied_pv, "1")
-        if client.get(applied_pv, numeric_enum=True) != "1":
-            raise ValueError(
-                f"axis {plan.axis}: ConfigApplied readback failed")
+        if development_guards:
+            if client.get(f"{record}_able", numeric_enum=True) != "1":
+                raise ValueError(
+                    f"axis {plan.axis}: unexpectedly enabled during apply")
+            applied_pv = f"{record}:Commissioning:ConfigApplied"
+            client.put(applied_pv, "1")
+            if client.get(applied_pv, numeric_enum=True) != "1":
+                raise ValueError(
+                    f"axis {plan.axis}: ConfigApplied readback failed")
+    if not development_guards:
+        for plan in plans:
+            client.put(f"{prefix}m{plan.axis}_able", "0")
 
 
 def render_plan(prefix: str, plans: Sequence[AxisPlan], warnings: Sequence[str]) -> str:
@@ -175,8 +196,8 @@ def render_plan(prefix: str, plans: Sequence[AxisPlan], warnings: Sequence[str])
     lines = [
         "KOHZU STAGE CONFIGURATION APPLY PLAN",
         "DEFAULT MODE: NO IOC OR CONTROLLER VALUES WERE CHANGED",
-        "All targets must be Disable=1, DMOV=1, MOVN=0 before --apply.",
-        "The tool never enables an axis.",
+        "Basic mode applies selected model fields, then releases the bootstrap lock.",
+        "No HOME, ORG, motion, STOP, or controller-setting command is issued.",
         "",
     ]
     lines.extend(f"WARNING: {warning}" for warning in warnings)
@@ -185,7 +206,7 @@ def render_plan(prefix: str, plans: Sequence[AxisPlan], warnings: Sequence[str])
     for plan in plans:
         lines.append(f"Axis {plan.axis}: {prefix}m{plan.axis} model={plan.model}")
         lines.extend(f"  {suffix}={value}" for suffix, value in plan.fields)
-        lines.append("  final state=DISABLED")
+        lines.append("  final state after basic --apply=ENABLED")
         lines.append("")
     if not plans:
         lines.append("No assigned axes found.")
@@ -206,6 +227,10 @@ def main() -> int:
                             "/usr/local/epics/base-7.0.7/bin/linux-x86_64"))
     parser.add_argument("--apply", action="store_true",
                         help="perform guarded CA writes; otherwise print only")
+    parser.add_argument(
+        "--development-guards", action="store_true",
+        help="re-enable legacy Disable/stopped/commissioning checks",
+    )
     arguments = parser.parse_args()
     try:
         if not PREFIX_PATTERN.fullmatch(arguments.prefix):
@@ -219,8 +244,11 @@ def main() -> int:
             if not plans:
                 raise ValueError("no assigned axes to apply")
             client = ChannelAccess(arguments.epics_bin)
-            apply_plans(client, arguments.prefix, plans)
-            print(f"Applied {len(plans)} axis configurations; all remain DISABLED")
+            apply_plans(
+                client, arguments.prefix, plans,
+                development_guards=arguments.development_guards,
+            )
+            print(f"Applied {len(plans)} axis configurations")
     except (ValueError, KeyError, configparser.Error,
             subprocess.SubprocessError, OSError) as error:
         print(f"Stage configuration apply failed: {error}", file=sys.stderr)

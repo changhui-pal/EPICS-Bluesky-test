@@ -866,3 +866,112 @@ position 56000, stopped, not homed, limit/EMG OFF로 raw TCP 결과와 일치했
 CW/CCW limit가 동시에 ON이므로 미연결 스테이지의 미사용 입력으로 취급하고 다음 실제
 동작 시험을 축 1로 제한한다. read-only IOC는 2.2초 뒤 정상 종료했으며 write 명령과
 motor record는 사용하지 않았다.
+
+## 2026-08-11: 이상적 고정점 endpoint 기구 계산
+
+`X -> Y -> Z -> Pitch -> Yaw` 적층 스테이지에서 Yaw 표면 기준 임의의 점을 고정하기
+위한 최초 계산 모듈을 추가했다. 실제 장비에서 확인한 `+X=앞`, `+Y=오른쪽`,
+`+Z=위`, `+Pitch=앞쪽 상승`, `+Yaw=위에서 시계방향`을 사용한다. 사용자 병진 방향은
+왼손 좌표이므로 내부 계산은 `Xc=X`, `Yc=-Y`, `Zc=Z`의 오른손 좌표로 변환한다.
+
+공식 도면에서 얻은 Pitch/Yaw 공통 회전축 교차점과 Yaw 테이블 표면 중심 사이의 명목
+거리 `38 mm`를 immutable geometry 기본값으로 사용한다. 적층 순서와 실제 회전 부호를
+반영한 회전은 `Ry(-Pitch) * Rz(-Yaw)`다.
+
+새 `kohzu_kinematics` 패키지는 다음 기능을 제공한다.
+
+- Yaw 표면 사용자 좌표와 내부 계산 좌표 사이의 변환
+- 현재 5축 pose에서 고정점의 실험실 위치를 구하는 순기구학
+- 목표 Pitch/Yaw에서 같은 점을 유지할 X/Y/Z 절대 endpoint 계산
+- 계산 전후 residual과 선택적 public EPICS 소프트 리미트 판정
+- 유한값, geometry와 limit 입력 검증
+
+이 모듈은 EPICS/Ophyd를 import하지 않고 IOC, controller, Enable, HOME, STOP 및 이동
+PV에 접근하지 않는다. 축 부호, Yaw 축상 점, 38 mm Pitch lever arm, 임의 자세 residual,
+왕복 복귀, 사용자 Y 방향 limit 판정과 invalid input을 포함한 새 단위시험 15개가
+통과했다. 기존 시험을 포함해 `kohzu-bluesky` 환경의 Python 단위시험 38개가 모두
+통과했다. 상세 이론과 다음 궤적 sampling 단계는
+`docs/10-fixed-point-kinematics.md`에 기록했다.
+
+## 2026-08-11: 고정점 궤적 sampling과 dry-run 보고
+
+endpoint 기구 계산 위에 실제 장비와 분리된 `kohzu_kinematics/trajectory.py`를
+추가했다. 현재 Pitch/Yaw에서 목표 Pitch/Yaw까지 joint-space 선형 보간하고, 각
+sample에서 같은 실험실 고정점을 유지하는 X/Y/Z 절대 위치를 계산한다. `N`개 구간은
+양 끝을 포함한 `N+1`개 sample을 만든다.
+
+경로 전체에서 다음 진단값을 계산한다.
+
+- 모든 sample의 고정점 residual과 최대 residual
+- public EPICS 좌표의 축별 LLM/HLM 및 최초 실패 sample/축
+- 시작 자세 대비 축별 최대 absolute excursion
+- sample 간 유한차분 속도와 가속도의 축별 최대 절대값
+- `collision_checked=false`
+
+속도와 가속도는 controller-ready profile이 아닌 sample 유한차분이다. 시작 전과 종료
+후의 속도 불연속은 포함하지 않으며 dry-run 보고서에 이를 명시한다. 보고서는
+`NO HARDWARE WRITES`, 경로 종류, duration/sample 수, 목표 pose, residual, limit 결과와
+충돌 미검사를 사람이 검토할 수 있는 텍스트로 출력한다.
+
+궤적 endpoint, 선형 각도, 모든 sample의 residual, 시작 자세 보존, 속도·가속도,
+limit 통과/최초 실패, 빈 limit, 보고서와 invalid duration/interval을 검증하는 새 시험
+14개가 통과했다. 단계 A와 B의 기구 시험은 29개이며 기존 시험을 합친 전체 Python
+단위시험 52개가 `kohzu-bluesky` 환경에서 통과했다. 실제 IOC와 controller에는
+연결하거나 쓰지 않았다.
+
+## 2026-08-12: 5축 read-only snapshot과 dry-run preflight
+
+고정점 계산이 임의 입력값이 아니라 IOC의 현재 5축 상태를 사용할 수 있도록
+`kohzu_kinematics/snapshot.py`와 `tools/fixed_point_dry_run.py`를 추가했다. reader는
+축 1~5의 `RBV/DMOV/MOVN/HLS/LLS/LVIO/LLM/HLM`과 controller EMG 상태만 고정
+allowlist로 읽으며 caput이나 write adapter를 제공하지 않는다.
+
+snapshot은 모든 PV 존재, 유한값, alarm, binary 상태와 freshness를 확인한다. 이후
+EMG 해제, 다섯 축 `DMOV=1/MOVN=0`, hardware limit와 LVIO 해제를 모두 만족해야만
+단계 B 궤적 dry-run을 계산한다. 실패 조건은 계산 전에 전체 거부한다.
+
+Disable 상태에서 한 번도 process되지 않은 passive motor record는 timestamp가
+`<undefined>`일 수 있다. server timestamp가 정의된 PV에는 실제 timestamp age를
+적용하고, undefined인 경우 synchronous CA get 완료 시각을 observation timestamp로
+사용한다. 결과에는 `server_timestamps_complete=false`를 표시한다. 실제 다축 이동
+승인 전에는 driver polling generation 또는 별도 snapshot timestamp를 추가해 이 계약을
+강화해야 한다.
+
+전용 `FIXED:` mock IOC와 loopback simulator 통합시험을 추가했다. 실제 축 5 IOC는
+사용자 승인에 따라 먼저 Disable, `DMOV=1`, `MOVN=0`을 확인한 뒤 종료했다. mock의
+다섯 축은 계속 Disable이었고 dry-run은 전 sample soft limit PASS와 residual 0을
+보고했다. simulator 로그에서 WSY/ORG/APS/RPS/FRP/WTB/STP/WRP/REM은 모두 0건이었다.
+실제 IOC는 시험 후 재시작하지 않았다.
+
+## 2026-08-12: 32축 통합 IOC를 5축 운전 IOC로 전환
+
+축마다 catalog 모델을 선택하는 기존 32축 IOC를 실제 5축 운전에 사용하도록 production
+`st.cmd`의 controller 연결, 32개 motor record, 진단·HOME·commissioning DB와 접근
+보안을 활성화했다. 모든 motor record는 IOC 시작 시 `Disable`이고, 모델이 지정된
+1~5축만 `stage_config_apply.py`의 적용 대상이다. 이 문단의 최초 구현에서는 적용 후에도
+Disable을 유지했으나, 아래에 기록한 기본 end-to-end 프로파일에서 적용 성공 후 Enable로
+전환하도록 변경했다.
+
+축 5는 육안으로 확인한 X축 평행 작업 원점을 영구 운전 설정으로 반영했다. assignment의
+HOME 선택은 Method 10, 운전 소프트 범위는 `-173.786~+173.134 deg`다. Method 8 기반
+`axis5HardwareTest.cmd`는 좌표 상실 시 CCW limit를 다시 찾는 복구 전용으로 남겼다.
+
+이후 기본 end-to-end 프로파일은 더 단순해졌다. commissioning DB, Ready flag와 access
+security는 기본 IOC에서 사용하지 않고 코드와 문서에 개발 이력으로만 보존한다.
+`stage_config_apply.py --apply`는 할당 축을 Disable 상태에서 설정하고 readback을 검증한
+뒤 `_able=Enable`로 전환한다. HOME method 선택과 실행은 사용자 책임이며, Bluesky
+고정점 실행의 기본 운전 gate도 `_able` 하나다. 이전 commissioning 검사는
+`--development-guards`, 실행 안전 실험은 `--safety-checks`에서만 명시적으로 사용한다.
+
+## 2026-08-13: 고정점 실행 정리와 보정 보류
+
+이상적 고정점 모델에 MRES/OFF/DIR 기반 sample 양자화를 추가하고, 실제 장비에서
+임시 고정점 `(20,0,0) mm`, Pitch/Yaw `0 -> +0.1 -> 0 deg` 왕복 실행을 완료했다.
+각 방향은 현재 snapshot에서 독립적으로 계산했고 OFF/FOFF는 변경하지 않았다. 양자화
+후 같은 pulse가 연속되는 sample은 건너뛰며 달라진 축만 Ophyd/Bluesky로 요청한다.
+
+`kohzu-bluesky` 환경에 pytest를 설치하여 전체 결과 `103 passed, 7 subtests passed`를
+확인했다. 기본 실행에서 불필요하던 `EmergencyActive` 연결은 제거하고
+`--safety-checks`에만 남겼다. 실제 축 비직교, 회전축 편심, 적층 높이와 케이스 장착
+오차는 측정 도구 또는 카메라 기반 측정 방법이 마련될 때까지 보정값을 추정하지 않고
+모두 0인 이상적 모델을 유지한다.

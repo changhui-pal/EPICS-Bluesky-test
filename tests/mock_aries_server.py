@@ -14,7 +14,7 @@ def send_line(connection: socket.socket, text: str) -> None:
     connection.sendall(text.encode("ascii") + b"\r\n")
 
 
-def serve(host: str, port: int) -> None:
+def serve(host: str, port: int, emergency_axis: int = 6) -> None:
     """Accept one IOC connection and answer its read-only discovery commands."""
     # Axis 1 applies WSY normally. Axis 2 deliberately acknowledges WSY but
     # retains its value so the driver's mandatory RSY readback can catch it.
@@ -67,7 +67,7 @@ def serve(host: str, port: int) -> None:
                             # inside software limit, correction range valid
                             # Axis 6 keeps physical EMG active so guarded REM
                             # is rejected. Axis 1 stays clear for HOME preflight.
-                            emergency = 1 if axis == 6 else 0
+                            emergency = 1 if axis == emergency_axis else 0
                             drive = 1 if moving[axis] else 0
                             send_line(connection, f"C\tSTR{axis}\t{drive}\t{emergency}\t2\t0\t0\t1")
                         else:
@@ -177,8 +177,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Read-only mock ARIES server")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=22321)
+    parser.add_argument(
+        "--emergency-axis", type=int, choices=range(0, 7), default=6,
+        help="axis reporting EMG, or 0 for no active EMG",
+    )
     arguments = parser.parse_args()
-    serve(arguments.host, arguments.port)
+    serve(arguments.host, arguments.port, arguments.emergency_axis)
 
 
 if __name__ == "__main__":

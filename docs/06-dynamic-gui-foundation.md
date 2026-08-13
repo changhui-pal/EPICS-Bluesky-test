@@ -1,5 +1,10 @@
 # 동적 축 패널 GUI 기반
 
+> 현재 상태: 이 문서는 commissioning PV와 guarded Enable을 사용했던 GUI 개발 실험을
+> 기록한다. 현재 기본 IOC에서는 commissioning DB/access security를 로드하지 않으므로
+> 이 GUI의 Enable, HOME 및 확인 write 기능을 기본 운전에 사용하지 않는다. 표시·진단
+> 구조와 코드는 보존하며, 현재 실제 고정점 이동은 `tools/fixed_point_run.py`를 사용한다.
+
 ## 선택한 방식
 
 현재 환경에는 PyDM, PyQt, PySide, tkinter가 없고 Phoebus 4.7.4만 설치되어 있다.

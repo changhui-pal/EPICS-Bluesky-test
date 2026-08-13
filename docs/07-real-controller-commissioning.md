@@ -328,3 +328,49 @@ velocity: 10 deg/s = 5000 pulse/s
 final: DMOV=1, MOVN=0, HLS=0, LLS=0, LVIO=0, Disable
 diagnostic: LastErrorCode=0, LastWarningCode=0
 ```
+
+## 2026-08-11 설치 방향과 축 5 작업 원점 확인
+
+CRL 케이스의 앞쪽 구멍에 있는 한 점을 고정하는 5축 운동을 준비하기 위해 설치 좌표의
+남은 방향과 축 5 Yaw의 실제 평행 기준을 관찰했다.
+
+축 2를 원점에서 기본속도 `0.1 mm/s`로 `+1.0 mm` 이동한 뒤 0으로 복귀했다. 사용자가
+위에서 본 실제 움직임을 관찰해 `+Y=오른쪽`, `-Y=왼쪽`으로 확인했다. 기존 결과와
+합치면 사용자 좌표 방향은 다음과 같다.
+
+```text
++X=앞,  -X=뒤
++Y=오른쪽, -Y=왼쪽
++Z=위,  -Z=아래
++Pitch=앞쪽 상승
++Yaw=위에서 시계방향
+```
+
+축 5는 Method 8의 CCW limit 원점을 다시 확립한 뒤 `178.5`, `178.676`, `179.0`,
+`179.5`, `180.0 deg` 부근을 기본속도 `2 deg/s`로 비교했다. 측정된 하드 리미트
+`1~178676 pulse`의 수학적 중앙은 `89338.5 pulse`이며, 표현 가능한 아래쪽 후보
+`89338 pulse=178.676 deg`도 재확인했다. 그러나 사용자가 CRL 케이스와 X축의 평행을
+육안으로 비교한 결과 `179.000 deg`가 가장 가까운 설치 기준이라고 판정했다.
+
+Method 8 기준 `179.000 deg` 위치에서 Method 10을 실행해 작업 Yaw 원점을 `0 deg`로
+설정했다. 같은 물리 안전 영역 `5.214~352.134 deg`를 새 좌표로 변환하면 runtime
+소프트 범위는 다음과 같다.
+
+```text
+working origin: Method 10 at former Method 8 position +179.000 deg
+RBV after ORG: 0 deg
+LLM/HLM: -173.786 / +173.134 deg
+final: DMOV=1, MOVN=0, HLS=0, LLS=0, LVIO=0, Disable
+```
+
+이 Method 10과 변환 리미트는 이후 32축 통합 IOC의 운전 설정으로 승격했다.
+model catalog와 axis assignment는 재시작 시 Method 10 및
+`-173.786~+173.134 deg`를 적용한다. 단, Method 10 선택은 HOME 명령을 실행하기 전까지
+controller 좌표를 바꾸지 않는다. `axis5HardwareTest.cmd`는 작업 원점 상실 시
+Method 8로 CCW limit를 다시 찾는 복구·commissioning 전용으로 유지한다. 복구 순서는
+Method 8 HOME, `+179.000 deg` 이동, Method 10 ORG, 통합 IOC 복귀다.
+
+고정점 운동의 최초 이상적 모델은 X/Y/Z 직교, Pitch와 Yaw 회전축 교차, Yaw 표면
+중심과 Yaw 축 일치를 가정한다. SA05A-R2B01과 RA04A-W01 공식 도면에서 Pitch 회전
+중심은 Yaw 표면 중심보다 명목상 `38 mm` 위다. 좌표계, 변환식과 단계별 시험 계획은
+`docs/10-fixed-point-kinematics.md`에 기록한다.

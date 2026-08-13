@@ -67,7 +67,7 @@ python3 --version
 python3 -m venv .venv-bluesky
 source .venv-bluesky/bin/activate
 python3 -m pip install --upgrade pip
-python3 -m pip install ophyd bluesky pyepics ipython
+python3 -m pip install ophyd bluesky pyepics ipython pytest
 ```
 
 각 패키지의 역할은 다음과 같다.
@@ -76,6 +76,7 @@ python3 -m pip install ophyd bluesky pyepics ipython
 - `bluesky`: RunEngine과 이동·스캔 plan
 - `pyepics`: EPICS Channel Access 클라이언트
 - `ipython`: 대화형 시험 환경
+- `pytest`: 프로젝트의 Python 회귀시험 실행
 
 공식 Ophyd 페이지는 PyPI의 `pip install ophyd`와 conda-forge의
 `conda install -c conda-forge ophyd`를 안내한다. 이 프로젝트에서는 재현하기 쉬운
@@ -310,9 +311,10 @@ RunEngine은 plan 실행 중 장치의 `set()` 완료를 기다리고 실행 문
 | 5 | ±1° |
 
 표의 값은 현재 위치가 소프트 리미트에서 충분히 떨어진 경우의 상대 이동량이다.
-5번 축은 Method 8 원점 `0°`가 CCW 센서 해제 경계이고 운전 소프트 범위는
-`5.214° ~ 352.134°`이므로, 원점 직후 `-1°/+1°` 왕복 시험을 하면 안 된다. 먼저
-안전한 허용 위치로 이동한 뒤 그 주변에서 작은 왕복 시험을 수행한다.
+5번 축의 현재 운전 원점은 Method 8 기준 `+179.000°`에서 Method 10으로 설정한
+X축 평행 작업 원점이며, 소프트 범위는 `-173.786° ~ +173.134°`다. 작업 원점 상실 후
+Method 8 복구 원점 `0°`에서는 곧바로 왕복 시험하지 말고, 복구 절차를 끝내 Method 10
+작업 원점을 다시 확립한 뒤 그 주변에서 작은 왕복 시험을 수행한다.
 
 3번 Z축은 HOME 및 limit 센서가 고장 난 상태다. 전원 재인가나 좌표 신뢰성 상실 후에는
 사람이 위치를 확인하고 Method 10으로 원점을 다시 확립하기 전까지 Bluesky 자동 이동과
@@ -355,7 +357,7 @@ RunEngine은 plan 실행 중 장치의 `set()` 완료를 기다리고 실행 문
 
 - `motor.limits`와 `motor.position`을 확인한다.
 - 리미트를 넓혀 우회하지 말고 좌표와 원점이 올바른지 먼저 확인한다.
-- 5번 축은 Method 8 원점 기준 운전 범위 `5.214° ~ 352.134°`를 사용한다.
+- 5번 축은 Method 10 작업 원점 기준 운전 범위 `-173.786° ~ +173.134°`를 사용한다.
 
 ### plan 실행 중 문제 발생
 
