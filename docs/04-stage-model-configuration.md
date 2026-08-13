@@ -136,8 +136,8 @@ SYS.2 원점 방법을 사람이 검토할 수 있는 텍스트로 출력한다.
 ## Guarded IOC 적용
 
 `stage_config_apply.py`는 모델 이름이 들어 있는 assignment를 준비 대상으로 삼는다.
-현재 1~5축 모두 `enabled=false`지만 모델 설정은 미리 적용할 수 있으며, 도구가
-`_able`이나 enabled 상태를 Enable로 바꾸지는 않는다.
+현재 1~5축 모두 `enabled=false`지만 모델 설정은 미리 적용할 수 있다. 적용 완료 후
+각 축의 `_able`은 assignment의 `enabled` 값을 따른다.
 
 기본 실행은 계획만 출력한다.
 
@@ -159,11 +159,11 @@ python3 tools/stage_config_apply.py --prefix KOHZU: --apply
 3. `_able=1`과 motor record의 SDIS를 유지하여 record processing 차단
 4. DESC, EGU, DIR, MRES, LLM/HLM, VMAX, VELO, VBAS, ACCL과 HOME method 적용
 5. 각 write를 즉시 readback 비교
-6. 기본 프로파일에서는 성공한 할당 축을 최종적으로 Enable
+6. assignment가 `enabled=true`인 축만 최종적으로 Enable
 
 설정값을 쓰는 동안에는 `_able=Disable`로 SDIS를 활성화하여 MRES 등 설정 변경이
 motor record 처리나 이동 요청으로 이어지지 않게 한다. 모든 readback이 일치한 뒤에만
-할당된 축을 `_able=Enable`로 바꾼다. HOME, ORG, 이동 및 controller 설정 명령은 보내지
+`enabled=true`인 축만 `_able=Enable`로 바꾼다. HOME, ORG, 이동 및 controller 설정 명령은 보내지
 않는다. 과거 commissioning PV 기반 검사는 `--development-guards`에서만 보존하며 기본
 프로파일에서는 사용하지 않는다.
 

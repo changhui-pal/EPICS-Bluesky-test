@@ -959,7 +959,7 @@ HOME 선택은 Method 10, 운전 소프트 범위는 `-173.786~+173.134 deg`다.
 이후 기본 end-to-end 프로파일은 더 단순해졌다. commissioning DB, Ready flag와 access
 security는 기본 IOC에서 사용하지 않고 코드와 문서에 개발 이력으로만 보존한다.
 `stage_config_apply.py --apply`는 할당 축을 Disable 상태에서 설정하고 readback을 검증한
-뒤 `_able=Enable`로 전환한다. HOME method 선택과 실행은 사용자 책임이며, Bluesky
+뒤 assignment의 `enabled` 값에 따라 최종 `_able` 상태를 정한다. HOME method 선택과 실행은 사용자 책임이며, Bluesky
 고정점 실행의 기본 운전 gate도 `_able` 하나다. 이전 commissioning 검사는
 `--development-guards`, 실행 안전 실험은 `--safety-checks`에서만 명시적으로 사용한다.
 
@@ -975,3 +975,34 @@ security는 기본 IOC에서 사용하지 않고 코드와 문서에 개발 이�
 `--safety-checks`에만 남겼다. 실제 축 비직교, 회전축 편심, 적층 높이와 케이스 장착
 오차는 측정 도구 또는 카메라 기반 측정 방법이 마련될 때까지 보정값을 추정하지 않고
 모두 0인 이상적 모델을 유지한다.
+
+## 2026-08-13: GUI 최소 구조 재구현
+
+기존 commissioning, HOME, 진단과 recovery 화면을 제거하고 축 1~32, catalog 모델 선택,
+생성 및 패널 삭제만 제공하는 GUI로 다시 시작했다. 생성 API는 공용 stage-config 적용
+코드를 사용해 선택한 한 축의 모델 고유 field를 실제 IOC에 적용하고 readback 성공 후
+Enable한다. 설치에 종속되는 DIR과 OriginMethod는 보존하며 이동 명령은 제공하지 않는다.
+assignment는 패널 상태의 영속 기준이다. 삭제는 축을 Disable하고 모델 할당을 제거하며,
+정상 서버 종료는 모든 패널 축을 Disable하고 모델을 보존한다. 다음 시작은 저장된 모델
+축을 다시 적용·Enable하고 패널을 자동 복원한다.
+
+Python 전체 시험은 `102 passed, 7 subtests passed`였고 새 GUI loopback 통합시험에서
+축 6 RA04A-W01 적용, 삭제, 다른 모델 재생성, 정상 종료 및 assignment 동기화와
+controller motion/write 명령 0건을 확인했다.
+
+저장소 최상위에 `start_kohzu_control.sh`를 추가했다. 이 launcher는 production IOC 시작,
+PV 준비 대기, persistent assignment 적용과 GUI 시작을 한 명령으로 수행한다. 종료 시
+GUI의 assignment/Disable cleanup을 먼저 완료한 뒤 IOC를 종료하며, 중복 IOC/GUI 실행과
+시작 timeout을 거부한다.
+
+최초 launcher 시험에서 기존 빌드 산출물의 RUNPATH가 이전 저장소
+`/home/changhui1788/Documents/codex-EPICS-control-test`를 가리켜 TOP 불일치 경고가
+발생했고, sudo가 현재 shell의 `LD_LIBRARY_PATH`를 제거하면서 `libKohzuAriesLynx.so`를
+찾지 못했다. 현재 경로에서 `make clean && make -j2`로 다시 빌드하여 executable RUNPATH와
+`envPaths`의 TOP을 `/home/changhui1788/Documents/EPICS-Bluesky-test`로 맞췄다. launcher는
+권한이 필요 없는 IOC를 기본적으로 일반 사용자로 실행하고 `--sudo`를 opt-in으로 바꿨다.
+
+GUI 축 패널에 RBV/EGU, Enable, MOVN/DMOV, HLS/LLS/LVIO, LLM/HLM, VELO/VMAX,
+DIR/MRES와 OriginMethod의 read-only 표시를 추가했다. 패널 하나당 모든 상태 PV를 한 CA
+호출로 읽고 브라우저에서 1초마다 갱신한다. 이동, STOP, 속도 변경과 HOME write는 아직
+추가하지 않았다.

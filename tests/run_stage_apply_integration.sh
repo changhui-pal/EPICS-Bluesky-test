@@ -91,8 +91,8 @@ assert_pv MOCK:m5.HLM 173.134
 assert_pv MOCK:m5:OriginMethodSelectedRBV 10
 for axis in {1..5}; do
     assert_pv "MOCK:m${axis}.DISP" 0
-    if [[ "$("${epics_bin}/caget" -t -n "MOCK:m${axis}_able")" != "0" ]]; then
-        printf 'Axis %s did not start in the basic-operation profile.\n' "${axis}" >&2
+    if [[ "$("${epics_bin}/caget" -t -n "MOCK:m${axis}_able")" != "1" ]]; then
+        printf 'Axis %s did not preserve assignment enabled=false.\n' "${axis}" >&2
         exit 1
     fi
 done

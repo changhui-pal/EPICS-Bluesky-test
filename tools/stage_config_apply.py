@@ -3,7 +3,7 @@
 
 The default mode prints a plan and performs no Channel Access operations.
 Actual writes require ``--apply``. Basic apply requires the bootstrap lock,
-writes and verifies model fields, then enables every assigned axis. The old
+writes and verifies model fields, then follows each assignment's enabled state. The old
 commissioning checks remain available only through ``--development-guards``.
 """
 
@@ -33,6 +33,7 @@ class AxisPlan:
     axis: int
     model: str
     fields: Tuple[Tuple[str, str], ...]
+    enabled: bool = True
 
 
 def format_value(value: float) -> str:
@@ -44,9 +45,8 @@ def build_plans(models_path: pathlib.Path, axes_path: pathlib.Path,
                 sys16_limit: float) -> Tuple[List[AxisPlan], List[str]]:
     """Validate files and prepare every assigned slot, enabled or disabled.
 
-    Assignment is defined by a non-empty model. The configuration's enabled
-    flag is deliberately not acted on: commissioning must enable axes later in
-    a separate operator-controlled step.
+    Assignment is defined by a non-empty model. The enabled flag is the desired
+    runtime state recorded by the GUI/server lifecycle.
     """
     warnings: List[str] = []
     models = validator.load_models(models_path, sys16_limit, warnings)
@@ -74,7 +74,8 @@ def build_plans(models_path: pathlib.Path, axes_path: pathlib.Path,
             ("ACCL", format_value(model.acceleration_time)),
             (":OriginMethod", str(home_method)),
         )
-        plans.append(AxisPlan(axis, model_name, fields))
+        plans.append(AxisPlan(
+            axis, model_name, fields, section.getboolean("enabled")))
     return plans, warnings
 
 
@@ -188,7 +189,8 @@ def apply_plans(client: ChannelAccess, prefix: str,
                     f"axis {plan.axis}: ConfigApplied readback failed")
     if not development_guards:
         for plan in plans:
-            client.put(f"{prefix}m{plan.axis}_able", "0")
+            if plan.enabled:
+                client.put(f"{prefix}m{plan.axis}_able", "0")
 
 
 def render_plan(prefix: str, plans: Sequence[AxisPlan], warnings: Sequence[str]) -> str:
@@ -196,7 +198,7 @@ def render_plan(prefix: str, plans: Sequence[AxisPlan], warnings: Sequence[str])
     lines = [
         "KOHZU STAGE CONFIGURATION APPLY PLAN",
         "DEFAULT MODE: NO IOC OR CONTROLLER VALUES WERE CHANGED",
-        "Basic mode applies selected model fields, then releases the bootstrap lock.",
+        "Basic mode applies model fields, then follows assignment enabled state.",
         "No HOME, ORG, motion, STOP, or controller-setting command is issued.",
         "",
     ]
@@ -206,7 +208,8 @@ def render_plan(prefix: str, plans: Sequence[AxisPlan], warnings: Sequence[str])
     for plan in plans:
         lines.append(f"Axis {plan.axis}: {prefix}m{plan.axis} model={plan.model}")
         lines.extend(f"  {suffix}={value}" for suffix, value in plan.fields)
-        lines.append("  final state after basic --apply=ENABLED")
+        state = "ENABLED" if plan.enabled else "DISABLED"
+        lines.append(f"  final state after basic --apply={state}")
         lines.append("")
     if not plans:
         lines.append("No assigned axes found.")

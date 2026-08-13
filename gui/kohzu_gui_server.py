@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Local-only web GUI backend for dynamic KOHZU axis panels.
+"""Local web GUI for applying one catalog model to one IOC axis slot."""
 
-The GUI uses IOC-side guarded commissioning requests.  It never writes raw
-_able or controller protocol commands.
-"""
+from __future__ import annotations
 
 import argparse
 import configparser
+import io
 import json
 import pathlib
 import re
 import secrets
+import signal
 import subprocess
 import sys
+import tempfile
+import threading
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -21,178 +23,282 @@ from urllib.parse import urlparse
 PROJECT = pathlib.Path(__file__).resolve().parents[1]
 TOOLS = PROJECT / "tools"
 sys.path.insert(0, str(TOOLS))
+import stage_config_apply as stage_apply  # noqa: E402
 import validate_stage_config as validator  # noqa: E402
 
 
 PREFIX_PATTERN = re.compile(r"^[A-Za-z0-9:_-]+$")
-AXIS_PATH = re.compile(
-    r"^/api/axis/([1-9]|[12][0-9]|3[0-2])/"
-    r"(status|enable|disable|origin-method|home|confirmation)$")
-RECOVERY_PATH = re.compile(r"^/api/recovery/(release-emg|refresh-axes)$")
-
+PANEL_PATH = "/api/panels"
+PANEL_ITEM_PATH = re.compile(r"^/api/panels/([1-9]|[12][0-9]|3[0-2])$")
+PANEL_STATUS_PATH = re.compile(
+    r"^/api/panels/([1-9]|[12][0-9]|3[0-2])/status$")
 STATUS_SUFFIXES = (
-    ".RBV", ".VAL", ".EGU", ".DMOV", ".MOVN", ".HLS", ".LLS",
-    ":OriginMethodSelectedRBV", ":HomeStatus",
-    ":MoveStatus", ":PositionStatus",
-    ":Commissioning:ConfigApplied",
-    ":Commissioning:DirectionVerified",
-    ":Commissioning:SensorsVerified",
-    ":Commissioning:LimitsVerified",
-    ":Commissioning:HomeEstablished",
-    ":Commissioning:Ready",
+    ".RBV", ".EGU", "_able", ".MOVN", ".DMOV", ".HLS", ".LLS",
+    ".LVIO", ".LLM", ".HLM", ".VELO", ".VMAX", ".DIR", ".MRES",
+    ":OriginMethodSelectedRBV",
 )
-
-DIAGNOSTIC_SUFFIXES = (
-    "Diag:LastErrorCode", "Diag:LastErrorText", "Diag:LastErrorCommand",
-    "Diag:LastErrorRaw", "Diag:LastWarningCode", "Diag:LastWarningText",
-    "Diag:LastWarningCommand", "Diag:LastWarningRaw",
-    "Recovery:EmergencyActive", "Recovery:Status")
+ASSIGNMENT_HEADER = """# Persistent IOC axis slots and GUI panel assignments.
+# model present: restore this panel at the next GUI server start.
+# enabled true: the panel is active and the IOC axis is currently Enable.
+"""
 
 
-def load_gui_configuration(models_path: pathlib.Path,
-                           axes_path: pathlib.Path) -> dict:
-    """Return validated catalog/assignment data safe to send to a browser."""
+def load_gui_configuration(models_path: pathlib.Path) -> dict:
+    """Return the validated stage catalog exposed to the browser."""
     models = validator.load_models(models_path, 50000.0, [])
-    validator.validate_axes(axes_path, models)
-    axes = validator.read_ini(axes_path)
     return {
-        "models": [{"name": model.name, "description": model.description,
-                    "egu": model.egu} for model in models.values()],
-        "axes": [{"axis": axis,
-                  "assigned_model": axes[f"axis:{axis}"].get("model", "").strip(),
-                  "configured_enabled": axes[f"axis:{axis}"].getboolean("enabled")}
-                 for axis in range(1, 33)],
+        "models": [
+            {
+                "name": model.name,
+                "description": model.description,
+                "egu": model.egu,
+            }
+            for model in models.values()
+        ],
+        "axes": list(range(1, 33)),
     }
 
 
-class ChannelAccess:
-    """Whitelisted subprocess adapter for the installed EPICS CA clients."""
+class AssignmentStore:
+    """Atomically maintain persistent axis/model and session enable state."""
 
-    def __init__(self, epics_bin: pathlib.Path, prefix: str):
-        self.caget = epics_bin / "caget"
-        self.caput = epics_bin / "caput"
+    def __init__(self, path: pathlib.Path, models_path: pathlib.Path):
+        self.path = path
+        self.models_path = models_path
+        self.lock = threading.RLock()
+        models = validator.load_models(models_path, 50000.0, [])
+        validator.validate_axes(path, models)
+
+    def _read(self) -> configparser.ConfigParser:
+        return validator.read_ini(self.path)
+
+    def _write(self, parser: configparser.ConfigParser) -> None:
+        models = validator.load_models(self.models_path, 50000.0, [])
+        directory = self.path.parent
+        temporary_path = None
+        try:
+            rendered = io.StringIO()
+            parser.write(rendered)
+            contents = ASSIGNMENT_HEADER + rendered.getvalue().rstrip() + "\n"
+            with tempfile.NamedTemporaryFile(
+                    mode="w", encoding="utf-8", dir=directory,
+                    prefix=self.path.name + ".", suffix=".tmp",
+                    delete=False) as stream:
+                stream.write(contents)
+                stream.flush()
+                temporary_path = pathlib.Path(stream.name)
+            validator.validate_axes(temporary_path, models)
+            temporary_path.replace(self.path)
+            temporary_path = None
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
+
+    def panels(self) -> list[dict]:
+        """Return every model assignment that should be restored as a panel."""
+        with self.lock:
+            parser = self._read()
+            return [
+                {
+                    "axis": axis,
+                    "model": parser[f"axis:{axis}"].get("model", "").strip(),
+                    "enabled": parser[f"axis:{axis}"].getboolean("enabled"),
+                }
+                for axis in range(1, 33)
+                if parser[f"axis:{axis}"].get("model", "").strip()
+            ]
+
+    def assign(self, axis: int, model: str, *, enabled: bool) -> None:
+        with self.lock:
+            parser = self._read()
+            section = parser[f"axis:{axis}"]
+            section["model"] = model
+            section["enabled"] = str(enabled).lower()
+            # New empty slots need a valid installation placeholder. These are
+            # not written to the IOC by model apply and may be edited later.
+            if not section.get("direction", "").strip():
+                section["direction"] = "Pos"
+            if not section.get("sensors", "").strip():
+                section["sensors"] = "none"
+            if not section.get("home_method", "").strip():
+                section["home_method"] = "4"
+            self._write(parser)
+
+    def set_enabled(self, axis: int, enabled: bool) -> None:
+        with self.lock:
+            parser = self._read()
+            parser[f"axis:{axis}"]["enabled"] = str(enabled).lower()
+            self._write(parser)
+
+    def remove(self, axis: int) -> None:
+        with self.lock:
+            parser = self._read()
+            section = parser[f"axis:{axis}"]
+            section["enabled"] = "false"
+            section.pop("model", None)
+            self._write(parser)
+
+
+def build_model_plan(axis: int, model_name: str, models_path: pathlib.Path
+                     ) -> stage_apply.AxisPlan:
+    """Build one runtime plan containing model-owned fields only."""
+    if axis < 1 or axis > 32:
+        raise ValueError("axis must be within 1..32")
+    models = validator.load_models(models_path, 50000.0, [])
+    if model_name not in models:
+        raise ValueError("unknown stage model")
+    model = models[model_name]
+    fields = (
+        ("DESC", model.description),
+        ("EGU", model.egu),
+        ("MRES", stage_apply.format_value(model.mres)),
+        ("LLM", stage_apply.format_value(model.low_limit)),
+        ("HLM", stage_apply.format_value(model.high_limit)),
+        ("VMAX", stage_apply.format_value(model.vmax)),
+        ("VELO", stage_apply.format_value(model.default_velocity)),
+        ("VBAS", stage_apply.format_value(model.base_velocity)),
+        ("ACCL", stage_apply.format_value(model.acceleration_time)),
+    )
+    return stage_apply.AxisPlan(axis, model_name, fields)
+
+
+class ModelApplicator:
+    """Apply a single reviewed model through the shared CA implementation."""
+
+    def __init__(self, epics_bin: pathlib.Path, prefix: str,
+                 models_path: pathlib.Path):
+        self.client = stage_apply.ChannelAccess(epics_bin)
         self.prefix = prefix
-        if not self.caget.is_file() or not self.caput.is_file():
-            raise ValueError(f"caget/caput not found in {epics_bin}")
+        self.models_path = models_path
 
-    def read_axis(self, axis: int) -> dict:
-        """Read only the fixed status allowlist for one validated axis."""
+    def apply(self, axis: int, model_name: str) -> dict:
+        plan = build_model_plan(axis, model_name, self.models_path)
         record = f"{self.prefix}m{axis}"
-        pvs = [record + suffix for suffix in STATUS_SUFFIXES]
-        # -S renders CHAR waveform diagnostics as strings instead of a count
-        # followed by byte values; scalar motor fields are unaffected.
-        result = subprocess.run([str(self.caget), "-t", "-S", *pvs], check=True,
-                                capture_output=True, text=True, timeout=5.0)
-        values = result.stdout.splitlines()
-        if len(values) != len(pvs):
-            raise ValueError("unexpected caget status value count")
-        return {suffix: value for suffix, value in zip(STATUS_SUFFIXES, values)}
-
-    def request(self, axis: int, action: str) -> None:
-        """Write only a guarded commissioning request, never a motor field."""
-        if action not in ("enable", "disable"):
-            raise ValueError("unsupported GUI action")
-        request = "EnableRequest" if action == "enable" else "DisableRequest"
-        pv = f"{self.prefix}m{axis}:Commissioning:{request}"
-        subprocess.run([str(self.caput), "-t", pv, "1"], check=True,
-                       capture_output=True, text=True, timeout=5.0)
-
-    def get_one(self, pv: str, string_array: bool = False,
-                numeric_enum: bool = False) -> str:
-        """Read one PV with the representation required by safety checks."""
-        command = [str(self.caget), "-t"]
-        if string_array:
-            command.append("-S")
-        if numeric_enum:
-            command.append("-n")
-        command.append(pv)
-        result = subprocess.run(command, check=True, capture_output=True,
-                                text=True, timeout=5.0)
-        return result.stdout.strip()
-
-    def put_one(self, pv: str, value: str) -> None:
-        subprocess.run([str(self.caput), "-t", pv, value], check=True,
-                       capture_output=True, text=True, timeout=5.0)
-
-    def select_origin_method(self, axis: int, method: int) -> None:
-        """Select only a driver-advertised method and invalidate old HOME."""
-        if method < 1 or method > 15:
-            raise ValueError("Origin method must be within 1..15")
-        record = f"{self.prefix}m{axis}"
-        # The user chooses the sensor-compatible method.  The GUI only checks
-        # the controller's documented numeric range and disables before change.
-        self.put_one(record + ":Commissioning:InvalidateHomeRequest", "1")
-        self.put_one(record + ":OriginMethod", str(method))
-
-    def set_confirmation(self, axis: int, name: str, verified: bool) -> None:
-        """Record only fixed operator confirmations under stopped/Disable guards."""
-        flags = {
-            "direction": "DirectionVerified",
-            "sensors": "SensorsVerified",
-            "limits": "LimitsVerified",
-            "home": "HomeEstablished",
+        dmov = self.client.get(record + ".DMOV")
+        movn = self.client.get(record + ".MOVN")
+        if dmov != "1" or movn != "0":
+            raise ValueError(
+                f"axis {axis}: model apply requires DMOV=1 and MOVN=0")
+        # Startup recovery and explicit creation both take the bootstrap lock
+        # before applying. This also permits a clean GUI restart after a prior
+        # process ended without running its shutdown handler.
+        self.disable(axis)
+        stage_apply.apply_plans(self.client, self.prefix, [plan])
+        return {
+            "axis": axis,
+            "model": model_name,
+            "record": f"{self.prefix}m{axis}",
+            "enabled": True,
         }
-        if name not in flags:
-            raise ValueError("unsupported commissioning confirmation")
-        record = f"{self.prefix}m{axis}"
-        # Revocation is always safety-decreasing. HOME revocation also clears
-        # the machine completion latch through the IOC invalidation chain.
-        if not verified:
-            if name == "home":
-                self.put_one(record + ":Commissioning:InvalidateHomeRequest", "1")
-            else:
-                self.put_one(record + ":Commissioning:DisableRequest", "1")
-                self.put_one(record + ":Commissioning:" + flags[name], "0")
+
+    def disable(self, axis: int) -> None:
+        pv = f"{self.prefix}m{axis}_able"
+        if self.client.get(pv, numeric_enum=True) == "1":
             return
-        values = {
-            "config": self.get_one(record + ":Commissioning:ConfigApplied",
-                                   numeric_enum=True),
-            "able": self.get_one(record + "_able", numeric_enum=True),
-            "dmov": self.get_one(record + ".DMOV"),
-            "movn": self.get_one(record + ".MOVN"),
-        }
-        if values != {"config": "1", "able": "1", "dmov": "1",
-                      "movn": "0"}:
-            raise ValueError(
-                "Confirmation requires applied config, stopped axis and Disable")
-        self.put_one(record + ":Commissioning:" + flags[name], "1")
+        self.client.put(pv, "Disable")
+        if self.client.get(pv, numeric_enum=True) != "1":
+            raise ValueError(f"axis {axis}: Disable readback failed")
 
-    def request_home(self, axis: int) -> None:
-        """Request the user-selected HOME method on a ready, enabled axis."""
+    def read_status(self, axis: int) -> dict:
+        """Read one panel's fixed status allowlist in one CA invocation."""
         record = f"{self.prefix}m{axis}"
-        ready = self.get_one(record + ":Commissioning:Ready")
-        able = self.get_one(record + "_able", numeric_enum=True)
-        if ready != "1" or able != "0":
-            raise ValueError(
-                "HOME requires CommissioningReady=1 and motor Enable=0")
-        # HOMF and HOMR both map to the selected ARIES SYS.2 method; use HOMF
-        # consistently and let the driver repeat its STR/SYS.2 safety checks.
-        self.put_one(record + ".HOMF", "1")
-
-    def read_diagnostics(self) -> dict:
-        """Read decoded controller diagnostics and guarded recovery status."""
-        pvs = [self.prefix + suffix for suffix in DIAGNOSTIC_SUFFIXES]
-        result = subprocess.run([str(self.caget), "-t", "-S", *pvs], check=True,
-                                capture_output=True, text=True, timeout=5.0)
+        pvs = [
+            record + suffix if suffix != "_able" else record + "_able"
+            for suffix in STATUS_SUFFIXES
+        ]
+        result = subprocess.run(
+            [str(self.client.caget), "-t", "-S", *pvs], check=True,
+            capture_output=True, text=True, timeout=5.0,
+        )
         values = result.stdout.splitlines()
         if len(values) != len(pvs):
-            raise ValueError("unexpected diagnostic value count")
-        return {suffix: value for suffix, value in zip(DIAGNOSTIC_SUFFIXES, values)}
+            raise ValueError("unexpected panel status value count")
+        return dict(zip(STATUS_SUFFIXES, values))
 
-    def request_recovery(self, action: str) -> None:
-        """Request only the two existing driver-guarded recovery operations."""
-        suffixes = {"release-emg": "Recovery:ReleaseEMG",
-                    "refresh-axes": "Recovery:RefreshAxes"}
-        if action not in suffixes:
-            raise ValueError("unsupported recovery action")
-        subprocess.run([str(self.caput), "-t", self.prefix + suffixes[action], "1"],
-                       check=True, capture_output=True, text=True, timeout=5.0)
+
+class PanelManager:
+    """Synchronize browser panels, assignments and IOC enable state."""
+
+    def __init__(self, store: AssignmentStore, applicator: ModelApplicator):
+        self.store = store
+        self.applicator = applicator
+        self.lock = threading.RLock()
+        self.active: dict[int, dict] = {}
+
+    def restore(self) -> None:
+        """Apply and enable all persistent model assignments at GUI startup."""
+        restored = []
+        try:
+            for assignment in self.store.panels():
+                result = self.applicator.apply(
+                    assignment["axis"], assignment["model"])
+                restored.append(assignment["axis"])
+                self.store.set_enabled(assignment["axis"], True)
+                self.active[assignment["axis"]] = result
+        except BaseException:
+            for axis in restored:
+                try:
+                    self.applicator.disable(axis)
+                finally:
+                    self.store.set_enabled(axis, False)
+            raise
+
+    def list(self) -> list[dict]:
+        with self.lock:
+            return [self.active[axis] for axis in sorted(self.active)]
+
+    def status(self, axis: int) -> dict:
+        with self.lock:
+            if axis not in self.active:
+                raise ValueError(f"axis {axis}: panel does not exist")
+        return {
+            "axis": axis,
+            "values": self.applicator.read_status(axis),
+        }
+
+    def create(self, axis: int, model: str) -> dict:
+        with self.lock:
+            if axis in self.active:
+                raise ValueError(f"axis {axis}: panel already exists")
+            result = self.applicator.apply(axis, model)
+            try:
+                self.store.assign(axis, model, enabled=True)
+            except BaseException:
+                self.applicator.disable(axis)
+                raise
+            self.active[axis] = result
+            return result
+
+    def delete(self, axis: int) -> dict:
+        with self.lock:
+            if axis not in self.active:
+                raise ValueError(f"axis {axis}: panel does not exist")
+            self.applicator.disable(axis)
+            self.store.remove(axis)
+            removed = self.active.pop(axis)
+            return {"axis": axis, "model": removed["model"], "enabled": False}
+
+    def shutdown(self) -> list[str]:
+        """Disable every panel axis and preserve its model for next startup."""
+        errors = []
+        with self.lock:
+            for axis in sorted(self.active):
+                try:
+                    self.applicator.disable(axis)
+                except BaseException as error:
+                    errors.append(f"axis {axis} Disable failed: {error}")
+                try:
+                    self.store.set_enabled(axis, False)
+                except BaseException as error:
+                    errors.append(f"axis {axis} assignment update failed: {error}")
+            self.active.clear()
+        return errors
 
 
 class GuiHandler(SimpleHTTPRequestHandler):
-    """Serve static assets and a minimal same-origin JSON API."""
+    """Serve static assets and the one minimal model-apply endpoint."""
 
-    server_version = "KohzuLocalGui/0.1"
+    server_version = "KohzuLocalGui/0.2"
 
     def send_json(self, value: dict, status: HTTPStatus = HTTPStatus.OK) -> None:
         payload = json.dumps(value, ensure_ascii=False).encode("utf-8")
@@ -203,79 +309,64 @@ class GuiHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
+    def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         if path == "/api/config":
             value = dict(self.server.gui_config)
-            value["prefix"] = self.server.ca.prefix
+            value["prefix"] = self.server.manager.applicator.prefix
             value["token"] = self.server.write_token
+            value["panels"] = self.server.manager.list()
             self.send_json(value)
             return
-        if path == "/api/diagnostics":
+        status_match = PANEL_STATUS_PATH.fullmatch(path)
+        if status_match:
             try:
-                self.send_json({"values": self.server.ca.read_diagnostics()})
+                self.send_json(
+                    self.server.manager.status(int(status_match.group(1))))
             except (ValueError, subprocess.SubprocessError, OSError) as error:
-                self.send_json({"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
-            return
-        match = AXIS_PATH.fullmatch(path)
-        if match and match.group(2) == "status":
-            try:
-                self.send_json({"axis": int(match.group(1)), "values":
-                                self.server.ca.read_axis(int(match.group(1)))})
-            except (ValueError, subprocess.SubprocessError, OSError) as error:
-                self.send_json({"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
+                self.send_json(
+                    {"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
             return
         if path == "/":
             self.path = "/index.html"
         super().do_GET()
 
-    def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
-        path = urlparse(self.path).path
-        match = AXIS_PATH.fullmatch(path)
-        recovery_match = RECOVERY_PATH.fullmatch(path)
-        if (not match and not recovery_match) or (match and match.group(2) == "status"):
+    def do_POST(self) -> None:  # noqa: N802
+        if urlparse(self.path).path != PANEL_PATH:
             self.send_json({"error": "unsupported endpoint"}, HTTPStatus.NOT_FOUND)
             return
-        if not secrets.compare_digest(self.headers.get("X-Kohzu-Token", ""),
-                                      self.server.write_token):
+        if not secrets.compare_digest(
+                self.headers.get("X-Kohzu-Token", ""), self.server.write_token):
             self.send_json({"error": "invalid write token"}, HTTPStatus.FORBIDDEN)
             return
         try:
-            if recovery_match:
-                action = recovery_match.group(1)
-                self.server.ca.request_recovery(action)
-                self.send_json({"requested": action})
-            else:
-                axis = int(match.group(1))
-                action = match.group(2)
-                if action == "origin-method":
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length < 1 or length > 1024:
-                        raise ValueError("invalid request body length")
-                    body = json.loads(self.rfile.read(length).decode("utf-8"))
-                    method = body.get("method")
-                    if not isinstance(method, int):
-                        raise ValueError("method must be an integer")
-                    self.server.ca.select_origin_method(axis, method)
-                elif action == "confirmation":
-                    length = int(self.headers.get("Content-Length", "0"))
-                    if length < 1 or length > 1024:
-                        raise ValueError("invalid request body length")
-                    body = json.loads(self.rfile.read(length).decode("utf-8"))
-                    name = body.get("name")
-                    verified = body.get("verified")
-                    if not isinstance(name, str) or not isinstance(verified, bool):
-                        raise ValueError("name must be text and verified must be boolean")
-                    self.server.ca.set_confirmation(axis, name, verified)
-                elif action == "home":
-                    self.server.ca.request_home(axis)
-                else:
-                    self.server.ca.request(axis, action)
-                self.send_json({"axis": axis, "requested": action})
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 1 or length > 1024:
+                raise ValueError("invalid request body length")
+            body = json.loads(self.rfile.read(length).decode("utf-8"))
+            axis = body.get("axis")
+            model = body.get("model")
+            if not isinstance(axis, int) or not isinstance(model, str):
+                raise ValueError("axis must be an integer and model must be text")
+            self.send_json(self.server.manager.create(axis, model))
         except (ValueError, subprocess.SubprocessError, OSError) as error:
             self.send_json({"error": str(error)}, HTTPStatus.BAD_GATEWAY)
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
             self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+
+    def do_DELETE(self) -> None:  # noqa: N802
+        match = PANEL_ITEM_PATH.fullmatch(urlparse(self.path).path)
+        if not match:
+            self.send_json({"error": "unsupported endpoint"}, HTTPStatus.NOT_FOUND)
+            return
+        if not secrets.compare_digest(
+                self.headers.get("X-Kohzu-Token", ""), self.server.write_token):
+            self.send_json({"error": "invalid write token"}, HTTPStatus.FORBIDDEN)
+            return
+        try:
+            self.send_json(self.server.manager.delete(int(match.group(1))))
+        except (ValueError, subprocess.SubprocessError, OSError) as error:
+            self.send_json({"error": str(error)}, HTTPStatus.BAD_GATEWAY)
 
     def log_message(self, message: str, *args) -> None:
         print(f"GUI {self.client_address[0]}: " + message % args)
@@ -296,19 +387,36 @@ def main() -> int:
     arguments = parser.parse_args()
     try:
         if arguments.listen != "127.0.0.1":
-            raise ValueError("GUI foundation is restricted to 127.0.0.1")
+            raise ValueError("GUI is restricted to 127.0.0.1")
         if not PREFIX_PATTERN.fullmatch(arguments.prefix):
             raise ValueError("invalid PV prefix")
-        gui_config = load_gui_configuration(arguments.models, arguments.axes)
-        ca = ChannelAccess(arguments.epics_bin, arguments.prefix)
+        gui_config = load_gui_configuration(arguments.models)
+        applicator = ModelApplicator(
+            arguments.epics_bin, arguments.prefix, arguments.models)
+        manager = PanelManager(
+            AssignmentStore(arguments.axes, arguments.models), applicator)
+        manager.restore()
         handler = lambda *values, **kwargs: GuiHandler(  # noqa: E731
             *values, directory=str(PROJECT / "gui" / "static"), **kwargs)
         server = ThreadingHTTPServer((arguments.listen, arguments.port), handler)
         server.gui_config = gui_config
-        server.ca = ca
+        server.manager = manager
         server.write_token = secrets.token_urlsafe(32)
         print(f"KOHZU GUI listening on http://{arguments.listen}:{arguments.port}")
-        server.serve_forever()
+        previous_term = signal.getsignal(signal.SIGTERM)
+        signal.signal(
+            signal.SIGTERM,
+            lambda _signum, _frame: (_ for _ in ()).throw(KeyboardInterrupt()),
+        )
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("KOHZU GUI shutdown requested")
+        finally:
+            server.server_close()
+            for message in manager.shutdown():
+                print(f"KOHZU GUI shutdown warning: {message}", file=sys.stderr)
+            signal.signal(signal.SIGTERM, previous_term)
     except (ValueError, configparser.Error, OSError) as error:
         print(f"Cannot start KOHZU GUI: {error}", file=sys.stderr)
         return 1

@@ -43,6 +43,7 @@ class StageConfigApplyTest(unittest.TestCase):
         self.assertEqual(axis3["MRES"], "0.00025")
         self.assertEqual(axis3["LLM"], "-3.92")
         self.assertEqual(axis3[":OriginMethod"], "10")
+        self.assertTrue(all(not plan.enabled for plan in plans))
 
     def test_development_preflight_failure_makes_no_writes(self):
         plan = APPLY.AxisPlan(1, "TEST", (("MRES", "0.001"),))
@@ -64,6 +65,13 @@ class StageConfigApplyTest(unittest.TestCase):
             ("TEST:m1.MRES", "0.001"),
             ("TEST:m1_able", "0"),
         ])
+
+    def test_disabled_assignment_remains_disabled(self):
+        plan = APPLY.AxisPlan(
+            1, "TEST", (("MRES", "0.001"),), enabled=False)
+        client = FakeChannelAccess({"TEST:m1_able": "1"})
+        APPLY.apply_plans(client, "TEST:", [plan])
+        self.assertEqual(client.writes, [("TEST:m1.MRES", "0.001")])
 
 
 if __name__ == "__main__":

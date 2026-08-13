@@ -55,9 +55,40 @@ ARIES/LYNX용 Model 3 드라이버
 - [`docs/08-ophyd-bluesky-basics.md`](docs/08-ophyd-bluesky-basics.md): Ophyd 설치, EPICS motor 연결 및 Bluesky 기초 사용법
 - [`docs/09-ophyd-bluesky-integration-log.md`](docs/09-ophyd-bluesky-integration-log.md): 실제 IOC와 Ophyd/Bluesky의 단계별 연동 시험 기록
 - [`docs/10-fixed-point-kinematics.md`](docs/10-fixed-point-kinematics.md): 5축 고정점 운동의 이상적 기구 모델, 변환식 및 시험 계획
+- [`docs/11-python-module-roles.md`](docs/11-python-module-roles.md): `kohzu_kinematics`, `kohzu_ophyd`, `tools`의 파일별 역할과 호출 관계
 - [`documents/stage-specifications/`](documents/stage-specifications/): KOHZU 공식 모델 사양 PDF와 검토용 추출문
 
 ## 새 환경에서 IOC 설정, 빌드 및 실행
+
+### 간편 실행
+
+빌드와 설정이 끝난 현재 장비에서는 저장소 최상위에서 다음 명령 하나로 IOC, persistent
+axis assignment 적용과 GUI를 순서대로 시작할 수 있다.
+
+```bash
+./start_kohzu_control.sh
+```
+
+기본적으로 IOC와 GUI 모두 현재 사용자로 실행한다. EPICS CA port와 controller TCP
+연결에는 root 권한이 필요하지 않다. 특별한 시스템 설정 때문에 IOC에 sudo가 필요한
+경우에만 다음을 사용한다.
+
+```bash
+./start_kohzu_control.sh --sudo
+```
+
+브라우저 주소는 `http://127.0.0.1:8080`이다. 종료할 때 launcher 터미널에서 Ctrl-C를
+한 번 누르면 GUI가 먼저 활성 패널 축을 Disable하고 assignment를 저장한 뒤 IOC를
+종료한다. 비정상 시작 로그는 `/tmp/kohzu-control.*`에 남는다.
+
+저장소 디렉터리를 옮기거나 이름을 바꾸면 EPICS 실행 파일의 RUNPATH와 `envPaths`가 이전
+절대 경로를 가리킬 수 있다. `TOP ... was built with TOP ...` 경고 또는 shared library
+오류가 나오면 현재 저장소 최상위에서 다시 빌드한다.
+
+```bash
+make clean
+make -j2
+```
 
 별도의 자동 치환 스크립트는 사용하지 않는다. 새 컴퓨터에서는 EPICS support 경로와
 IOC 시작 파일만 확인한다.
@@ -183,10 +214,9 @@ python3 tools/stage_config_apply.py --prefix KOHZU: --apply
 ```
 
 이 도구는 모델이 할당된 축의 `DESC`, `EGU`, `DIR`, `MRES`, `LLM/HLM`, `VMAX`,
-`VELO`, `VBAS`, `ACCL`, `OriginMethod`를 `_able=Disable` 상태에서 적용한 뒤 해당 축을
-`_able=Enable`로 전환한다. 현재
-`enabled=false`는 운영 승인 상태이고, `model` 항목이 존재하는 축은 설정 준비 및 적용
-대상이다.
+`VELO`, `VBAS`, `ACCL`, `OriginMethod`를 `_able=Disable` 상태에서 적용한다. 최종
+`_able` 상태는 assignment의 `enabled` 값을 따른다. `model` 항목이 존재하는 축은 설정
+적용 대상이며 GUI 웹서버가 시작되면 저장된 모델 축을 Enable하고 패널을 복원한다.
 
 commissioning PV, Ready flag와 access-security는 기본 학습용 end-to-end 프로파일에서
 사용하지 않는다. 이전 안전 실험은 소스에 opt-in 형태로 남겨 두었다.
@@ -384,16 +414,12 @@ python3 gui/kohzu_gui_server.py --prefix KOHZU:
 ```
 
 브라우저에서 `http://127.0.0.1:8080`을 연다. 축 1~32와 catalog 모델을 선택해 패널을
-생성·삭제할 수 있으며 삭제는 IOC 객체에 영향을 주지 않는다. 현재 GUI write는
-guarded Enable/Disable, OriginMethod 1~15 선택, Enable 상태의 HOME, 사용자 확인을 거친
-ReleaseEMG/RefreshAxes만 허용한다. Method를 바꾸면 축을 먼저 Disable하고
-HomeEstablished를 0으로 되돌린다. 센서에 맞는 Method 선택 책임은 사용자에게 있다.
-MOVE/JOG/WRP endpoint는 제공하지 않는다. 진단 패널에는 오류·경고 번호, 설명, 발생
-명령, 원문 응답과 EMG/복구 상태가 표시된다.
-
-패널의 commissioning 확인 영역에서는 방향·센서·리미트·원점만 승인하거나 취소할 수
-있다. 승인은 설정 적용, 정지, Disable 상태를 재검사한다. ConfigApplied는 GUI에서
-승인할 수 없다. HomeEstablished는 선택적인 사용자 확인이며 Enable 조건은 아니다.
+생성·삭제할 수 있다. 생성은 선택 축이 Disable일 때 선택 모델의 `DESC`, `EGU`,
+`MRES`, software limit와 속도 field를 실제 IOC에 적용하고 readback을 검증한 뒤 축을
+Enable하고 assignment에 저장한다. `DIR`과 OriginMethod는 축 고유 설정이므로 변경하지
+않는다. 삭제는 축을 Disable하고 assignment의 모델을 제거한다. 정상적인 웹서버 종료는
+모든 패널 축을 Disable하되 모델을 보존하며, 다음 시작 때 패널을 자동 복원한다. 현재
+GUI에는 위치 표시, 이동, HOME, commissioning, 진단 또는 recovery 기능이 없다.
 
 진단 database를 로드하면 다음 읽기 전용 PV가 생성된다. 아래 이름에서 prefix는
 mock IOC의 `MOCK:` 예시이며 실제 IOC에서는 설정한 prefix로 바뀐다.
@@ -442,18 +468,11 @@ python3 tools/stage_config_apply.py --prefix KOHZU:
 IOC와 controller 값을 전혀 변경하지 않는다.
 
 `stage_config_apply.py`도 기본 실행은 쓰기 없는 적용 계획만 출력한다. catalog에서
-모델이 할당된 1~5축을 대상으로 하며 assignment의 `enabled=false`를 바꾸지 않는다.
-실제 Channel Access write에는 별도 `--apply`가 필요하다. 적용 전 모든 대상이
-`_able=Disable(1)`, `DMOV=1`, `MOVN=0`인지 먼저 전부 검사하며 하나라도
-다르면 첫 write 전에 전체를 거부한다. 적용 중에도 `_able=1`과 SDIS를 유지하고
-각 필드는 write 후 readback을 비교한다. 이 도구는 축을 Enable하지 않으며 `DISP`는
-운전 잠금으로 사용하지 않는다.
-현재 production IOC가 비활성이라 `--apply`는 아직 실행하지 않았다.
-
-축 활성화는 GUI/Ophyd에서 `_able`을 직접 쓰지 않고 축별
-`Commissioning:EnableRequest`를 사용한다. Enable 요청은 `DMOV=1`, `MOVN=0`인 정지
-상태만 확인하며 `Commissioning:DisableRequest`는 언제나 조건 없이 Disable한다.
-방향·센서·리미트·원점 확인과 `Commissioning:Ready`는 기록 및 표시 용도다.
+모델이 할당된 축을 대상으로 하며 실제 Channel Access write에는 별도 `--apply`가
+필요하다. 적용 중에는 `_able=Disable`과 SDIS를 유지하고 각 field를 write/readback
+검증한다. 최종 `_able`은 assignment의 `enabled` 상태를 따른다. GUI 생성·삭제·종료가
+이 값을 현재 패널 수명주기에 맞춰 갱신한다. 과거 commissioning EnableRequest와 Ready
+구조는 기본 운전에서 사용하지 않는다.
 프로젝트 motor template은 `_able`을
 `KOHZU_INTERNAL_ENABLE` access group에 정적으로 배치한다. IOC에서
 `kohzuAriesLynxAccessSecurity.acf`를 iocInit 전에 로드하면 외부 Channel Access는
