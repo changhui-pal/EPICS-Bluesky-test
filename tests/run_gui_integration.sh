@@ -102,7 +102,7 @@ python3 -c 'import json,sys; v=json.load(sys.stdin); assert v=={"axis":6,"model"
 [[ "$("${epics_bin}/caget" -t -n MOCK:m6_able)" == "0" ]]
 
 status_json="$(curl --silent --fail http://127.0.0.1:18080/api/panels/6/status)"
-python3 -c 'import json,sys; v=json.load(sys.stdin); assert v["axis"]==6; s=v["values"]; required=[".RBV",".EGU","_able",".MOVN",".DMOV",".HLS",".LLS",".LVIO",".LLM",".HLM",".VELO",".VMAX",".DIR",".MRES",":OriginMethodSelectedRBV"]; assert all(k in s for k in required)' \
+python3 -c 'import json,sys; v=json.load(sys.stdin); assert v["axis"]==6; s=v["values"]; required=[".RBV",".VAL",".EGU","_able",".MOVN",".DMOV",".HLS",".LLS",".LVIO",".LLM",".HLM",".VELO",".VMAX",".VBAS",".ACCL",".DIR",".MRES",".OFF",".FOFF",".DVAL",".DRBV",".RVAL",".RRBV",".MSTA",":OriginMethodSelectedRBV"]; assert all(k in s for k in required)' \
     <<<"${status_json}"
 
 # A duplicate active panel is rejected.

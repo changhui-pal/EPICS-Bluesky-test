@@ -21,6 +21,9 @@ from urllib.parse import urlparse
 
 
 PROJECT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT))
+
+from kohzu_runtime import runtime_from_argv  # noqa: E402
 TOOLS = PROJECT / "tools"
 sys.path.insert(0, str(TOOLS))
 import stage_config_apply as stage_apply  # noqa: E402
@@ -33,8 +36,10 @@ PANEL_ITEM_PATH = re.compile(r"^/api/panels/([1-9]|[12][0-9]|3[0-2])$")
 PANEL_STATUS_PATH = re.compile(
     r"^/api/panels/([1-9]|[12][0-9]|3[0-2])/status$")
 STATUS_SUFFIXES = (
-    ".RBV", ".EGU", "_able", ".MOVN", ".DMOV", ".HLS", ".LLS",
-    ".LVIO", ".LLM", ".HLM", ".VELO", ".VMAX", ".DIR", ".MRES",
+    ".RBV", ".VAL", ".EGU", "_able", ".MOVN", ".DMOV", ".HLS", ".LLS",
+    ".LVIO", ".LLM", ".HLM", ".VELO", ".VMAX", ".VBAS", ".ACCL",
+    ".DIR", ".MRES", ".OFF", ".FOFF", ".DVAL", ".DRBV", ".RVAL",
+    ".RRBV", ".MSTA",
     ":OriginMethodSelectedRBV",
 )
 ASSIGNMENT_HEADER = """# Persistent IOC axis slots and GUI panel assignments.
@@ -373,21 +378,25 @@ class GuiHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> int:
+    runtime_path, runtime = runtime_from_argv()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--listen", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--prefix", default="KOHZU:")
+    parser.add_argument("--runtime-config", type=pathlib.Path,
+                        default=runtime_path)
+    parser.add_argument("--listen", default=runtime.gui_listen)
+    parser.add_argument("--port", type=int, default=runtime.gui_port)
+    parser.add_argument("--prefix", default=runtime.epics_prefix)
     parser.add_argument("--models", type=pathlib.Path,
                         default=PROJECT / "config" / "stage-models.ini")
     parser.add_argument("--axes", type=pathlib.Path,
                         default=PROJECT / "config" / "axis-assignments.ini")
     parser.add_argument("--epics-bin", type=pathlib.Path,
-                        default=pathlib.Path(
-                            "/usr/local/epics/base-7.0.7/bin/linux-x86_64"))
+                        default=runtime.epics_bin)
     arguments = parser.parse_args()
     try:
-        if arguments.listen != "127.0.0.1":
-            raise ValueError("GUI is restricted to 127.0.0.1")
+        if not arguments.listen.strip():
+            raise ValueError("GUI listen address must not be empty")
+        if not 1 <= arguments.port <= 65535:
+            raise ValueError("GUI port must be between 1 and 65535")
         if not PREFIX_PATTERN.fullmatch(arguments.prefix):
             raise ValueError("invalid PV prefix")
         gui_config = load_gui_configuration(arguments.models)
@@ -402,6 +411,12 @@ def main() -> int:
         server.gui_config = gui_config
         server.manager = manager
         server.write_token = secrets.token_urlsafe(32)
+        if arguments.listen not in {"127.0.0.1", "::1", "localhost"}:
+            print(
+                "WARNING: GUI is exposed beyond loopback without user "
+                "authentication or TLS; use only on a trusted network.",
+                file=sys.stderr,
+            )
         print(f"KOHZU GUI listening on http://{arguments.listen}:{arguments.port}")
         previous_term = signal.getsignal(signal.SIGTERM)
         signal.signal(

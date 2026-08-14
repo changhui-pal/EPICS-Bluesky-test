@@ -4,38 +4,102 @@ set -euo pipefail
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ioc_dir="${project_dir}/iocBoot/iockohzuAriesLynx"
 ioc_command="${ioc_dir}/st.cmd"
-python_command="/home/changhui1788/.conda/envs/kohzu-bluesky/bin/python"
-epics_bin="/usr/local/epics/base-7.0.7/bin/linux-x86_64"
-prefix="KOHZU:"
-gui_port=8080
+runtime_config="${project_dir}/config/runtime.ini"
 use_sudo=0
+
+# Locate an alternate configuration before deriving the remaining defaults.
+previous=""
+for argument in "$@"; do
+    if [[ "${previous}" == "--config" ]]; then
+        runtime_config="${argument}"
+        break
+    fi
+    previous="${argument}"
+done
+
+runtime_get() {
+    python3 "${project_dir}/tools/runtime_config.py" \
+        --config "${runtime_config}" --get "$1"
+}
+
+controller_host="$(runtime_get controller.host)"
+controller_port="$(runtime_get controller.port)"
+python_command="$(runtime_get python.executable)"
+epics_bin="$(runtime_get epics.bin)"
+prefix="$(runtime_get epics.prefix)"
+ca_addr_list="$(runtime_get epics.ca_addr_list)"
+gui_listen="$(runtime_get gui.listen)"
+gui_port="$(runtime_get gui.port)"
 
 usage() {
     cat <<'EOF'
-Usage: ./start_kohzu_control.sh [--sudo] [--port PORT]
+Usage: ./start_kohzu_control.sh [OPTIONS]
 
-Starts the production IOC, applies axis-assignments.ini, and starts the local
-GUI. Press Ctrl-C once to disable GUI panel axes, stop the web server, and then
-stop the IOC.
+Starts the production IOC, applies axis-assignments.ini, and starts the GUI.
+Defaults come from config/runtime.ini; command-line options override them.
 
 Options:
-  --sudo       Start the IOC through sudo (normally unnecessary).
-  --port PORT  GUI port (default: 8080).
-  -h, --help   Show this help.
+  --config FILE             Alternate runtime configuration file.
+  --controller-host HOST    Controller address override.
+  --controller-port PORT    Controller TCP port override.
+  --prefix PREFIX           EPICS PV prefix override.
+  --epics-bin DIRECTORY     EPICS command directory override.
+  --ca-addr-list ADDRESSES  EPICS Channel Access address list override.
+  --python EXECUTABLE       Python environment override.
+  --listen ADDRESS          GUI bind address override.
+  --port PORT               GUI port override.
+  --sudo                    Start the IOC through sudo (normally unnecessary).
+  -h, --help                Show this help.
 EOF
 }
 
 while (($#)); do
     case "$1" in
+        --config|--controller-host|--controller-port|--prefix|--epics-bin|\
+        --ca-addr-list|--python|--listen|--port)
+            if (($# < 2)); then
+                printf '%s requires a value\n' "$1" >&2
+                exit 2
+            fi
+            ;;
+    esac
+    case "$1" in
         --sudo)
             use_sudo=1
             shift
             ;;
+        --config)
+            shift 2
+            ;;
+        --controller-host)
+            controller_host="$2"
+            shift 2
+            ;;
+        --controller-port)
+            controller_port="$2"
+            shift 2
+            ;;
+        --prefix)
+            prefix="$2"
+            shift 2
+            ;;
+        --epics-bin)
+            epics_bin="$2"
+            shift 2
+            ;;
+        --ca-addr-list)
+            ca_addr_list="$2"
+            shift 2
+            ;;
+        --python)
+            python_command="$2"
+            shift 2
+            ;;
+        --listen)
+            gui_listen="$2"
+            shift 2
+            ;;
         --port)
-            if (($# < 2)); then
-                printf '%s\n' '--port requires a value' >&2
-                exit 2
-            fi
             gui_port="$2"
             shift 2
             ;;
@@ -51,10 +115,15 @@ while (($#)); do
     esac
 done
 
-if ! [[ "${gui_port}" =~ ^[0-9]+$ ]] || ((gui_port < 1 || gui_port > 65535)); then
-    printf 'Invalid GUI port: %s\n' "${gui_port}" >&2
-    exit 2
-fi
+for port_spec in "GUI:${gui_port}" "controller:${controller_port}"; do
+    port_name="${port_spec%%:*}"
+    port_value="${port_spec#*:}"
+    if ! [[ "${port_value}" =~ ^[0-9]+$ ]] || \
+            ((port_value < 1 || port_value > 65535)); then
+        printf 'Invalid %s port: %s\n' "${port_name}" "${port_value}" >&2
+        exit 2
+    fi
+done
 
 for required in "${ioc_command}" "${python_command}" \
                 "${epics_bin}/caget" "${project_dir}/tools/stage_config_apply.py"; do
@@ -125,14 +194,17 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 export EPICS_CA_AUTO_ADDR_LIST=NO
-export EPICS_CA_ADDR_LIST=127.0.0.1
+export EPICS_CA_ADDR_LIST="${ca_addr_list}"
+export KOHZU_CONTROLLER_HOST="${controller_host}"
+export KOHZU_CONTROLLER_PORT="${controller_port}"
+export KOHZU_PREFIX="${prefix}"
 
 if ((use_sudo)); then
     printf '%s\n' 'Authenticating sudo for IOC startup...'
     sudo -v
     (
         cd "${ioc_dir}"
-        exec sudo --preserve-env=LD_LIBRARY_PATH ./st.cmd
+        exec sudo --preserve-env=LD_LIBRARY_PATH,KOHZU_CONTROLLER_HOST,KOHZU_CONTROLLER_PORT,KOHZU_PREFIX ./st.cmd
     ) <&"${ioc_input_fd}" >"${ioc_log}" 2>&1 &
 else
     (
@@ -164,11 +236,21 @@ fi
 
 printf '%s\n' 'Applying persistent axis assignments...'
 "${python_command}" "${project_dir}/tools/stage_config_apply.py" \
-    --prefix "${prefix}" --epics-bin "${epics_bin}" --apply
+    --runtime-config "${runtime_config}" --prefix "${prefix}" \
+    --epics-bin "${epics_bin}" --apply
 
 "${python_command}" "${project_dir}/gui/kohzu_gui_server.py" \
-    --prefix "${prefix}" --port "${gui_port}" >"${gui_log}" 2>&1 &
+    --runtime-config "${runtime_config}" --prefix "${prefix}" \
+    --listen "${gui_listen}" --port "${gui_port}" \
+    --epics-bin "${epics_bin}" >"${gui_log}" 2>&1 &
 gui_pid=$!
+
+gui_probe_host="${gui_listen}"
+if [[ "${gui_probe_host}" == "0.0.0.0" ]]; then
+    gui_probe_host="127.0.0.1"
+elif [[ "${gui_probe_host}" == "::" || "${gui_probe_host}" == "::0" ]]; then
+    gui_probe_host="[::1]"
+fi
 
 gui_ready=0
 for _ in {1..100}; do
@@ -177,7 +259,7 @@ for _ in {1..100}; do
         cat "${gui_log}" >&2 || true
         exit 1
     fi
-    if curl --silent --fail "http://127.0.0.1:${gui_port}/api/config" \
+    if curl --silent --fail "http://${gui_probe_host}:${gui_port}/api/config" \
             >/dev/null 2>&1; then
         gui_ready=1
         break
@@ -191,7 +273,7 @@ if ((gui_ready == 0)); then
 fi
 
 printf '\nKOHZU control session is running.\n'
-printf 'GUI: http://127.0.0.1:%s\n' "${gui_port}"
+printf 'GUI bind: http://%s:%s\n' "${gui_listen}" "${gui_port}"
 printf 'Press Ctrl-C to stop GUI first and IOC second.\n\n'
 
 wait "${gui_pid}"

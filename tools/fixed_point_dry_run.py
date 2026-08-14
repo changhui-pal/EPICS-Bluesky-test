@@ -18,17 +18,21 @@ from kohzu_kinematics import (  # noqa: E402
     capture_five_axis_snapshot,
     format_trajectory_report,
 )
+from kohzu_runtime import runtime_from_argv  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
+    runtime_path, runtime = runtime_from_argv()
     parser = argparse.ArgumentParser(
         description="Read-only five-axis fixed-point trajectory dry-run"
     )
-    parser.add_argument("--prefix", default="MOCK:")
+    parser.add_argument("--runtime-config", type=pathlib.Path,
+                        default=runtime_path)
+    parser.add_argument("--prefix", default=runtime.epics_prefix)
     parser.add_argument(
         "--epics-bin",
         type=pathlib.Path,
-        default=pathlib.Path("/usr/local/epics/base-7.0.7/bin/linux-x86_64"),
+        default=runtime.epics_bin,
     )
     parser.add_argument("--fixed-x", type=float, required=True)
     parser.add_argument("--fixed-y", type=float, required=True)

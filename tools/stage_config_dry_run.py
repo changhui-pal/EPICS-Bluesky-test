@@ -73,12 +73,17 @@ def build_report(models_path: pathlib.Path, axes_path: pathlib.Path,
 
 def main() -> int:
     project = pathlib.Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(project))
+    from kohzu_runtime import runtime_from_argv
+    runtime_path, runtime = runtime_from_argv()
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--runtime-config", type=pathlib.Path,
+                        default=runtime_path)
     parser.add_argument("--models", type=pathlib.Path,
                         default=project / "config" / "stage-models.ini")
     parser.add_argument("--axes", type=pathlib.Path,
                         default=project / "config" / "axis-assignments.ini")
-    parser.add_argument("--prefix", default="KOHZU:")
+    parser.add_argument("--prefix", default=runtime.epics_prefix)
     parser.add_argument("--sys16-limit", type=float, default=50000.0)
     arguments = parser.parse_args()
     try:

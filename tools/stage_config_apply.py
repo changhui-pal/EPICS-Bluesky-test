@@ -218,16 +218,20 @@ def render_plan(prefix: str, plans: Sequence[AxisPlan], warnings: Sequence[str])
 
 def main() -> int:
     project = pathlib.Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(project))
+    from kohzu_runtime import runtime_from_argv
+    runtime_path, runtime = runtime_from_argv()
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--runtime-config", type=pathlib.Path,
+                        default=runtime_path)
     parser.add_argument("--models", type=pathlib.Path,
                         default=project / "config" / "stage-models.ini")
     parser.add_argument("--axes", type=pathlib.Path,
                         default=project / "config" / "axis-assignments.ini")
-    parser.add_argument("--prefix", default="KOHZU:")
+    parser.add_argument("--prefix", default=runtime.epics_prefix)
     parser.add_argument("--sys16-limit", type=float, default=50000.0)
     parser.add_argument("--epics-bin", type=pathlib.Path,
-                        default=pathlib.Path(
-                            "/usr/local/epics/base-7.0.7/bin/linux-x86_64"))
+                        default=runtime.epics_bin)
     parser.add_argument("--apply", action="store_true",
                         help="perform guarded CA writes; otherwise print only")
     parser.add_argument(

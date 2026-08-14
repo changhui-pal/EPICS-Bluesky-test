@@ -115,6 +115,8 @@ class GuiServerTest(unittest.TestCase):
         self.assertEqual(command[:3], ["/epics/caget", "-t", "-S"])
         self.assertEqual(command[3], "TEST:m4.RBV")
         self.assertIn("TEST:m4_able", command)
+        self.assertIn("TEST:m4.RRBV", command)
+        self.assertIn("TEST:m4.OFF", command)
         self.assertEqual(values[".RBV"], "0")
         self.assertEqual(len(values), len(MODULE.STATUS_SUFFIXES))
 

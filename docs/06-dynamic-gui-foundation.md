@@ -12,8 +12,9 @@
 - 패널의 삭제 버튼으로 축 Disable 및 모델 할당 제거
 - 패널별 motor 상태를 1초 간격으로 read-only 표시
 
-GUI는 Python 표준 HTTP server와 브라우저의 HTML/CSS/JavaScript로 구성하며
-`127.0.0.1`에만 bind한다. 추가 GUI framework는 필요하지 않다.
+GUI는 Python 표준 HTTP server와 브라우저의 HTML/CSS/JavaScript로 구성한다. 기본 bind는
+`127.0.0.1`이며 `config/runtime.ini` 또는 `--listen`으로 변경할 수 있다. 추가 GUI
+framework는 필요하지 않다.
 
 ## 패널 생성과 실제 적용
 
@@ -36,13 +37,15 @@ controller speed table 및 recovery 명령도 제공하지 않는다.
 각 패널은 한 번의 allowlist CA read로 다음 상태를 1초마다 갱신한다.
 
 ```text
-RBV, EGU, _able, MOVN, DMOV, HLS, LLS, LVIO,
-LLM, HLM, VELO, VMAX, DIR, MRES, OriginMethodSelectedRBV
+RBV, VAL, EGU, _able, MOVN, DMOV, HLS, LLS, LVIO,
+LLM, HLM, VELO, VMAX, VBAS, ACCL, DIR, MRES, OFF, FOFF,
+DVAL, DRBV, RVAL, RRBV, MSTA, OriginMethodSelectedRBV
 ```
 
 화면에는 현재 위치, Enabled/Disabled와 Moving/Stopped 요약, 양쪽 하드 리미트,
-software 범위, 현재/최대 속도, DIR/MRES와 Origin method가 표시된다. CA 연결 오류는
-패널별로 표시하며 다른 패널 갱신에는 영향을 주지 않는다.
+software 범위와 현재/최대 속도가 표시된다. 상세 보기에는 목표·dial·raw 좌표,
+DIR/MRES, OFF/FOFF, VBAS/ACCL, MSTA와 Origin method도 표시한다. CA 연결 오류는 패널별로
+표시하며 다른 패널 갱신에는 영향을 주지 않는다.
 
 ## assignment와 패널 수명주기
 
@@ -61,6 +64,11 @@ GUI 시작 시 `model`이 있는 모든 축을 다시 적용하고 Enable한 뒤
 제거하고 `enabled=false`로 저장한다. 실제 motor record slot과 현재 좌표는 삭제하지
 않는다. 따라서 같은 축과 모델을 즉시 다시 생성할 수 있다.
 
+`direction`, `sensors`, `home_method`는 모델 할당이 아니라 물리적인 축 설치 설정이므로
+삭제 후에도 보존한다. 다른 모델을 할당하면 새 모델의 단위·분해능·범위·속도 필드는
+교체되지만 이 세 값은 기존 축 값을 그대로 사용한다. 서로 다른 종류의 모델로 바꿀
+때에는 방향과 Origin Method가 적합한지 사용자가 다시 확인해야 한다.
+
 웹서버가 SIGINT 또는 SIGTERM으로 정상 종료되면 모든 활성 패널 축을 Disable하고
 `enabled=false`로 바꾸되 `model`은 보존한다. 다음 GUI 시작 때 해당 패널들이 다시
 적용·Enable된다. 브라우저 탭 닫기나 새로고침은 웹서버 종료가 아니므로 Disable하지
@@ -73,10 +81,21 @@ IOC가 별도 터미널에서 실행 중이고 32축이 생성된 상태에서 �
 ```bash
 conda activate kohzu-bluesky
 cd /home/changhui1788/Documents/EPICS-Bluesky-test
-python gui/kohzu_gui_server.py --prefix KOHZU:
+python gui/kohzu_gui_server.py
 ```
 
 브라우저에서 `http://127.0.0.1:8080`을 연다.
+
+다른 컴퓨터에서 접속할 때는 `config/runtime.ini`의 `gui.listen`을 서버 LAN IP 또는
+`0.0.0.0`으로 설정하고, 클라이언트에서는 서버의 실제 LAN IP로 접속한다. `127.0.0.1`은
+각 컴퓨터 자신을 뜻하므로 원격 접속에 사용할 수 없다. 현재 same-origin write token은
+임의 외부 사용자를 인증하는 장치가 아니며 TLS도 없으므로 외부 bind는 격리된 신뢰
+네트워크에서만 사용한다. non-loopback bind 시 서버도 이 제한을 경고한다.
+
+controller endpoint, EPICS prefix/bin/CA 주소, Python 실행 파일과 GUI bind/port는
+`config/runtime.ini`에서 함께 관리된다. launcher 옵션 및 각 Python 도구의 명시적 CLI
+인자는 해당 실행에 한해 중앙 기본값을 덮어쓴다. mock 시험의 loopback 주소와 포트는
+운영 설정과 무관한 격리 fixture이므로 중앙 설정을 사용하지 않는다.
 
 IOC부터 함께 시작하려면 저장소 최상위의 launcher를 사용한다.
 
@@ -100,12 +119,12 @@ python -m pytest -q tests/test_gui_server.py
 중복 패널도 거부되며 WRP, APS, RPS, FRP, ORG, WTB, WSY, STP와 REM 명령이 controller에
 전송되지 않은 것도 검사한다.
 
-## 다음 GUI 후보
+## 완료된 표시 단계와 다음 GUI 후보
 
 기능은 한 번에 하나씩 추가하고 각 단계마다 mock IOC 시험을 먼저 만든다. 현재 확정한
 구현 순서는 다음과 같다.
 
-### A. 실제 위치 단위 확인
+### A. 실제 위치 단위 확인 — 구현 완료
 
 GUI는 pulse field인 RRBV/RVAL이 아니라 사용자 좌표인 RBV를 표시한다. 실제 IOC에서
 다음을 함께 읽어 motor record 변환 관계를 확인한다.
@@ -117,14 +136,17 @@ RBV, RRBV, MRES, OFF, DIR, EGU
 정상 USE 모드의 일반 이동에서는 목표가 pulse 격자와 정확히 일치하지 않아도 OFF가
 변하지 않는다. motor record가 정수 pulse에 해당하는 실제 RBV를 계산한다.
 
-### B. 3단계 반응형 패널
+### B. 3단계 반응형 패널 — 표시 구조 구현 완료
 
 전체 화면의 `간편/기본/상세` 선택을 모든 축 패널에 공통 적용하고 선택값은 브라우저
 localStorage에 저장한다.
 
-- 간편: 모바일 한 화면에 5~6축이 보이도록 축, 위치, 상태, CCW/STOP/CW만 한 줄 표시
-- 기본: 상태, hard limit, 상대·절대 이동, STOP, 현재 속도와 축별 저장 위치
-- 상세: 기본 항목과 raw/dial/user 좌표, 변환값, 속도·limit·status 및 HOME 정보
+- 간편: 모바일 한 화면에 5~6축이 보이도록 축, 위치, 상태와 비활성
+  CCW/STOP/CW 자리를 한 줄로 표시
+- 기본: 현재 위치, 상태, hard/software limit와 현재 속도 표시
+- 상세: 기본 항목과 target/raw/dial/user 좌표, 변환값, 속도·limit·MSTA 및 Origin method
+
+아직 이동 명령은 없으며 간편 보기의 CCW/STOP/CW 버튼은 다음 단계까지 비활성이다.
 
 ### C. STOP과 일반 이동
 

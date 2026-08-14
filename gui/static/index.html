@@ -21,6 +21,12 @@
     <button id="create">생성</button>
     <p id="create-result" role="status"></p>
   </section>
+  <nav class="view-selector" aria-label="패널 표시 단계">
+    <span>패널 보기</span>
+    <button type="button" data-view="compact">간편</button>
+    <button type="button" data-view="basic">기본</button>
+    <button type="button" data-view="detail">상세</button>
+  </nav>
   <main id="panels" aria-live="polite"></main>
   <template id="panel-template">
     <article class="panel">
@@ -31,15 +37,32 @@
         </div>
         <button class="remove">삭제</button>
       </div>
-      <dl>
+      <div class="compact-row">
+        <span class="compact-axis"></span>
+        <strong class="compact-position">—</strong>
+        <span class="compact-unit"></span>
+        <span class="compact-state" aria-label="축 상태"></span>
+        <div class="compact-controls" title="STOP/JOG는 다음 개발 단계에서 활성화됩니다">
+          <button type="button" disabled>CCW</button>
+          <button type="button" class="stop" disabled>STOP</button>
+          <button type="button" disabled>CW</button>
+        </div>
+      </div>
+      <dl class="status-grid">
         <dt>적용 모델</dt><dd class="model-name"></dd>
         <dt>현재 위치</dt><dd><strong class="position">—</strong> <span class="unit"></span></dd>
         <dt>상태</dt><dd class="state">연결 중…</dd>
         <dt>하드 리미트</dt><dd class="hard-limits">—</dd>
         <dt>소프트 범위</dt><dd class="soft-limits">—</dd>
         <dt>속도</dt><dd class="velocity">—</dd>
-        <dt>DIR / MRES</dt><dd class="conversion">—</dd>
-        <dt>Origin method</dt><dd class="origin-method">—</dd>
+        <dt class="detail-only">목표 위치</dt><dd class="target detail-only">—</dd>
+        <dt class="detail-only">Dial 좌표</dt><dd class="dial detail-only">—</dd>
+        <dt class="detail-only">Raw pulse</dt><dd class="raw detail-only">—</dd>
+        <dt class="detail-only">DIR / MRES</dt><dd class="conversion detail-only">—</dd>
+        <dt class="detail-only">OFF / FOFF</dt><dd class="offset detail-only">—</dd>
+        <dt class="detail-only">VBAS / ACCL</dt><dd class="motion-config detail-only">—</dd>
+        <dt class="detail-only">MSTA</dt><dd class="msta detail-only">—</dd>
+        <dt class="detail-only">Origin method</dt><dd class="origin-method detail-only">—</dd>
       </dl>
       <p class="connection-state">상태 읽는 중…</p>
       <p class="note">삭제하면 축을 Disable하고 저장된 모델 할당도 제거합니다.</p>

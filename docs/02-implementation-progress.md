@@ -1006,3 +1006,23 @@ GUI 축 패널에 RBV/EGU, Enable, MOVN/DMOV, HLS/LLS/LVIO, LLM/HLM, VELO/VMAX,
 DIR/MRES와 OriginMethod의 read-only 표시를 추가했다. 패널 하나당 모든 상태 PV를 한 CA
 호출로 읽고 브라우저에서 1초마다 갱신한다. 이동, STOP, 속도 변경과 HOME write는 아직
 추가하지 않았다.
+
+GUI 전체에 간편/기본/상세 보기 전환을 추가하고 선택을 browser localStorage에 보존했다.
+간편 모드는 모바일에서 5~6축을 한 화면에 배치할 수 있는 축당 한 줄 구조이며
+CCW/STOP/CW 자리를 미리 배치했지만 아직 비활성이다. 기본 모드는 일반 상태를, 상세
+모드는 VAL/RBV, DVAL/DRBV, RVAL/RRBV, OFF/FOFF, VBAS/ACCL, MSTA와 기존 변환·원점
+정보를 표시한다. 확장된 상태도 panel당 단일 CA 호출로 읽는다.
+
+## 2026-08-14: runtime 설정 중앙화
+
+운영 기본값을 `config/runtime.ini`로 모았다. controller host/port, EPICS prefix와 command
+경로 및 CA address list, GUI listen/port, Python 실행 파일을 launcher와 GUI,
+stage-config 및 fixed-point 도구가 같은 loader로 읽는다. launcher는 값을 IOC 환경
+macro에도 전달하여 production `st.cmd`의 controller endpoint, prefix와 DB macro가 같은
+설정을 사용한다. 명령행 인자는 특정 실행에 한해 기본값을 덮어쓸 수 있다.
+
+GUI의 loopback 전용 제한은 제거했으며 기본값은 여전히 `127.0.0.1`이다. LAN IP 또는
+`0.0.0.0` bind가 가능하지만 현재 사용자 인증과 TLS가 없으므로 non-loopback에서는
+신뢰 네트워크 전용이라는 경고를 출력한다. tests의 loopback endpoint와 과거 축별
+hardware-test `.cmd`는 운영 설정이 아니라 격리 fixture와 시험 기록이므로 변경하지
+않았다.

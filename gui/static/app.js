@@ -2,6 +2,8 @@
 
 let configuration;
 const activePanels = new Map();
+const VIEW_KEY = "kohzu-panel-view";
+const VALID_VIEWS = new Set(["compact", "basic", "detail"]);
 
 async function request(path, options = {}) {
   const response = await fetch(path, options);
@@ -17,6 +19,8 @@ function isOn(value) {
 function renderStatus(panel, values) {
   panel.querySelector(".position").textContent = values[".RBV"];
   panel.querySelector(".unit").textContent = values[".EGU"];
+  panel.querySelector(".compact-position").textContent = values[".RBV"];
+  panel.querySelector(".compact-unit").textContent = values[".EGU"];
 
   const enabled = values["_able"] === "Enable" || values["_able"] === "0";
   const moving = isOn(values[".MOVN"]);
@@ -30,6 +34,10 @@ function renderStatus(panel, values) {
   if (violated) labels.push("Soft-limit violation");
   state.textContent = labels.join(" · ");
   state.className = `state ${limited || violated ? "alarm" : (enabled ? "normal" : "warning")}`;
+  const compactState = panel.querySelector(".compact-state");
+  compactState.textContent = moving ? "●" : "●";
+  compactState.title = labels.join(" · ");
+  compactState.className = `compact-state ${limited || violated ? "alarm" : (moving ? "moving" : (enabled ? "normal" : "warning"))}`;
 
   const lowHardware = isOn(values[".LLS"]) ? "ON" : "OFF";
   const highHardware = isOn(values[".HLS"]) ? "ON" : "OFF";
@@ -38,8 +46,19 @@ function renderStatus(panel, values) {
     `${values[".LLM"]} ~ ${values[".HLM"]} ${values[".EGU"]}`;
   panel.querySelector(".velocity").textContent =
     `${values[".VELO"]} / max ${values[".VMAX"]} ${values[".EGU"]}/s`;
+  panel.querySelector(".target").textContent =
+    `${values[".VAL"]} ${values[".EGU"]}`;
+  panel.querySelector(".dial").textContent =
+    `DVAL ${values[".DVAL"]} / DRBV ${values[".DRBV"]}`;
+  panel.querySelector(".raw").textContent =
+    `RVAL ${values[".RVAL"]} / RRBV ${values[".RRBV"]}`;
   panel.querySelector(".conversion").textContent =
     `${values[".DIR"]} / ${values[".MRES"]} ${values[".EGU"]}/pulse`;
+  panel.querySelector(".offset").textContent =
+    `${values[".OFF"]} / ${values[".FOFF"]}`;
+  panel.querySelector(".motion-config").textContent =
+    `${values[".VBAS"]} ${values[".EGU"]}/s / ${values[".ACCL"]} s`;
+  panel.querySelector(".msta").textContent = values[".MSTA"];
   panel.querySelector(".origin-method").textContent =
     `Method ${values[":OriginMethodSelectedRBV"]}`;
   const connection = panel.querySelector(".connection-state");
@@ -67,6 +86,7 @@ function addPanel(result) {
 
   const panel = document.getElementById("panel-template").content.firstElementChild.cloneNode(true);
   panel.querySelector("h2").textContent = `축 ${result.axis}`;
+  panel.querySelector(".compact-axis").textContent = `축 ${result.axis}`;
   panel.querySelector(".record").textContent = result.record;
   panel.querySelector(".model-name").textContent = result.model;
   panel.querySelector(".remove").onclick = async event => {
@@ -92,6 +112,17 @@ function addPanel(result) {
   activePanels.set(result.axis, panel);
   document.getElementById("panels").append(panel);
   refreshPanel(result.axis);
+}
+
+function setView(view) {
+  if (!VALID_VIEWS.has(view)) view = "basic";
+  document.body.dataset.view = view;
+  window.localStorage.setItem(VIEW_KEY, view);
+  for (const button of document.querySelectorAll("[data-view]")) {
+    const selected = button.dataset.view === view;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  }
 }
 
 async function createPanel() {
@@ -139,9 +170,12 @@ async function start() {
     modelSelect.append(option);
   }
   document.getElementById("create").onclick = createPanel;
+  for (const button of document.querySelectorAll("[data-view]"))
+    button.onclick = () => setView(button.dataset.view);
+  setView(window.localStorage.getItem(VIEW_KEY) || "basic");
   for (const panel of configuration.panels) addPanel(panel);
   document.getElementById("connection").textContent =
-    `localhost · PV prefix ${configuration.prefix} · 활성 패널 ${configuration.panels.length}개`;
+    `PV prefix ${configuration.prefix} · 활성 패널 ${configuration.panels.length}개`;
   window.setInterval(() => {
     for (const axis of activePanels.keys()) refreshPanel(axis);
   }, 1000);

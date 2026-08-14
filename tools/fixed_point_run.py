@@ -29,6 +29,7 @@ from kohzu_ophyd import (  # noqa: E402
     SafeStopEpicsMotor,
     fixed_point_trajectory_plan,
 )
+from kohzu_runtime import runtime_from_argv  # noqa: E402
 
 
 def authorize_execution(*, execute: bool, supplied_hash: str | None,
@@ -47,11 +48,14 @@ def authorize_execution(*, execute: bool, supplied_hash: str | None,
 
 
 def parser() -> argparse.ArgumentParser:
+    runtime_path, runtime = runtime_from_argv()
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument("--prefix", default="KOHZU:")
+    result.add_argument("--runtime-config", type=pathlib.Path,
+                        default=runtime_path)
+    result.add_argument("--prefix", default=runtime.epics_prefix)
     result.add_argument(
         "--epics-bin", type=pathlib.Path,
-        default=pathlib.Path("/usr/local/epics/base-7.0.7/bin/linux-x86_64"),
+        default=runtime.epics_bin,
     )
     result.add_argument("--fixed-x", type=float, required=True)
     result.add_argument("--fixed-y", type=float, required=True)

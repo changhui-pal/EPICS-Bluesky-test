@@ -77,7 +77,11 @@ axis assignment 적용과 GUI를 순서대로 시작할 수 있다.
 ./start_kohzu_control.sh --sudo
 ```
 
-브라우저 주소는 `http://127.0.0.1:8080`이다. 종료할 때 launcher 터미널에서 Ctrl-C를
+controller 주소, EPICS prefix/bin/CA 주소, Python 실행 파일과 GUI listen/port의 기본값은
+[`config/runtime.ini`](config/runtime.ini)에 모여 있다. 모든 값은 launcher 옵션으로도
+일시적으로 덮어쓸 수 있으며 `./start_kohzu_control.sh --help`에서 목록을 볼 수 있다.
+
+기본 브라우저 주소는 `http://127.0.0.1:8080`이다. 종료할 때 launcher 터미널에서 Ctrl-C를
 한 번 누르면 GUI가 먼저 활성 패널 축을 Disable하고 assignment를 저장한 뒤 IOC를
 종료한다. 비정상 시작 로그는 `/tmp/kohzu-control.*`에 남는다.
 
@@ -407,19 +411,31 @@ cd iocBoot/iockohzuAriesLynx
 복원을 확인하고
 WRP/APS/RPS/FRP/ORG/WTB/WSY/STP/REM이 전송되면 실패한다.
 
-localhost 동적 GUI 기반 실행:
+동적 GUI만 실행:
 
 ```bash
-python3 gui/kohzu_gui_server.py --prefix KOHZU:
+python3 gui/kohzu_gui_server.py
 ```
 
-브라우저에서 `http://127.0.0.1:8080`을 연다. 축 1~32와 catalog 모델을 선택해 패널을
+기본 `127.0.0.1` bind는 서버가 실행되는 컴퓨터에서만 접속할 수 있다. 같은 LAN의 다른
+컴퓨터에서 접속하려면 `runtime.ini`의 `gui.listen`을 서버의 LAN IP 또는 `0.0.0.0`으로
+바꾸고 브라우저에서는 `http://서버의-LAN-IP:8080`을 연다. `0.0.0.0`은 모든 로컬
+인터페이스에서 요청을 받으라는 bind 값이지 접속 주소가 아니다. 현재 GUI에는 사용자
+인증과 TLS가 없으므로 외부 bind는 격리된 신뢰 네트워크와 방화벽 안에서만 사용한다.
+
+축 1~32와 catalog 모델을 선택해 패널을
 생성·삭제할 수 있다. 생성은 선택 축이 Disable일 때 선택 모델의 `DESC`, `EGU`,
 `MRES`, software limit와 속도 field를 실제 IOC에 적용하고 readback을 검증한 뒤 축을
 Enable하고 assignment에 저장한다. `DIR`과 OriginMethod는 축 고유 설정이므로 변경하지
 않는다. 삭제는 축을 Disable하고 assignment의 모델을 제거한다. 정상적인 웹서버 종료는
 모든 패널 축을 Disable하되 모델을 보존하며, 다음 시작 때 패널을 자동 복원한다. 현재
-GUI에는 위치 표시, 이동, HOME, commissioning, 진단 또는 recovery 기능이 없다.
+GUI는 사용자·dial·raw 위치와 기본 motor 상태를 읽기 전용으로 표시하지만 이동, HOME,
+commissioning, 진단 또는 recovery 명령은 제공하지 않는다.
+
+패널 삭제나 다른 모델 할당에서도 `direction`, `sensors`, `home_method`는 모델이 아닌
+축 설치 고유 설정이므로 보존된다. 다른 종류의 모델로 교체할 때 이 값들이 새 모델에
+자동으로 맞춰지는 것은 아니므로 사용자가 방향과 Origin Method의 적합성을 다시
+확인해야 한다.
 
 진단 database를 로드하면 다음 읽기 전용 PV가 생성된다. 아래 이름에서 prefix는
 mock IOC의 `MOCK:` 예시이며 실제 IOC에서는 설정한 prefix로 바뀐다.
