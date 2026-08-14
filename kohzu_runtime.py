@@ -24,6 +24,7 @@ class RuntimeConfig:
     ca_addr_list: str
     gui_listen: str
     gui_port: int
+    gui_move_timeout: float
     python_executable: pathlib.Path
 
     def get(self, key: str) -> str:
@@ -35,6 +36,7 @@ class RuntimeConfig:
             "epics.ca_addr_list": self.ca_addr_list,
             "gui.listen": self.gui_listen,
             "gui.port": str(self.gui_port),
+            "gui.move_timeout": str(self.gui_move_timeout),
             "python.executable": str(self.python_executable),
         }
         try:
@@ -57,6 +59,14 @@ def _text(parser: configparser.ConfigParser, section: str, option: str) -> str:
     return value
 
 
+def _positive_float(parser: configparser.ConfigParser, section: str,
+                    option: str) -> float:
+    value = parser.getfloat(section, option)
+    if value <= 0:
+        raise ValueError(f"{section}.{option} must be greater than zero")
+    return value
+
+
 def load_runtime_config(path: pathlib.Path = DEFAULT_RUNTIME_PATH) -> RuntimeConfig:
     """Read and validate the common production runtime configuration."""
     parser = configparser.ConfigParser(interpolation=None)
@@ -74,6 +84,7 @@ def load_runtime_config(path: pathlib.Path = DEFAULT_RUNTIME_PATH) -> RuntimeCon
         ca_addr_list=_text(parser, "epics", "ca_addr_list"),
         gui_listen=_text(parser, "gui", "listen"),
         gui_port=_port(parser, "gui", "port"),
+        gui_move_timeout=_positive_float(parser, "gui", "move_timeout"),
         python_executable=pathlib.Path(
             _text(parser, "python", "executable")
         ).expanduser(),
@@ -90,4 +101,3 @@ def runtime_from_argv(
     )
     arguments, _ = pre_parser.parse_known_args(argv)
     return arguments.runtime_config, load_runtime_config(arguments.runtime_config)
-

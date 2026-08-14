@@ -4,20 +4,24 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import configparser
 import io
-import json
+import math
 import pathlib
 import re
 import secrets
-import signal
-import subprocess
 import sys
 import tempfile
 import threading
-from http import HTTPStatus
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from contextlib import asynccontextmanager
+from decimal import Decimal, ROUND_HALF_UP
+
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+import uvicorn
 
 
 PROJECT = pathlib.Path(__file__).resolve().parents[1]
@@ -28,24 +32,31 @@ TOOLS = PROJECT / "tools"
 sys.path.insert(0, str(TOOLS))
 import stage_config_apply as stage_apply  # noqa: E402
 import validate_stage_config as validator  # noqa: E402
+from kohzu_axis_session import AxisSession  # noqa: E402
 
 
 PREFIX_PATTERN = re.compile(r"^[A-Za-z0-9:_-]+$")
-PANEL_PATH = "/api/panels"
-PANEL_ITEM_PATH = re.compile(r"^/api/panels/([1-9]|[12][0-9]|3[0-2])$")
-PANEL_STATUS_PATH = re.compile(
-    r"^/api/panels/([1-9]|[12][0-9]|3[0-2])/status$")
-STATUS_SUFFIXES = (
-    ".RBV", ".VAL", ".EGU", "_able", ".MOVN", ".DMOV", ".HLS", ".LLS",
-    ".LVIO", ".LLM", ".HLM", ".VELO", ".VMAX", ".VBAS", ".ACCL",
-    ".DIR", ".MRES", ".OFF", ".FOFF", ".DVAL", ".DRBV", ".RVAL",
-    ".RRBV", ".MSTA",
-    ":OriginMethodSelectedRBV",
-)
 ASSIGNMENT_HEADER = """# Persistent IOC axis slots and GUI panel assignments.
 # model present: restore this panel at the next GUI server start.
 # enabled true: the panel is active and the IOC axis is currently Enable.
 """
+
+NUMERIC_WRITABLE_FIELDS = {
+    ".VELO", ".JVEL", ".JAR", ".ACCL", ".HVEL", ".VBAS", ".VMAX",
+    ".TWV", ".LLM", ".HLM", ".BDST", ".BVEL", ".BACC", ".RDBD",
+    ".RTRY", ".DLY", ".FRAC", ".OFF", ".MRES", ".PREC", ".UREV",
+    ".SREV", ".ERES", ".RRES",
+}
+INTEGER_WRITABLE_FIELDS = {".RTRY", ".PREC"}
+ENUM_WRITABLE_FIELDS = {
+    ".SET": {"Use", "Set"},
+    ".SPMG": {"Stop", "Pause", "Move", "Go"},
+    ".DIR": {"Pos", "Neg"},
+    ".FOFF": {"Variable", "Frozen"},
+    ".UEIP": {"No", "Yes"},
+    ".URIP": {"No", "Yes"},
+}
+COORDINATE_WRITABLE_FIELDS = {".OFF", ".MRES", ".DIR", ".FOFF"}
 
 
 def load_gui_configuration(models_path: pathlib.Path) -> dict:
@@ -153,6 +164,9 @@ def build_model_plan(axis: int, model_name: str, models_path: pathlib.Path
     if model_name not in models:
         raise ValueError("unknown stage model")
     model = models[model_name]
+    jog_acceleration = (
+        model.default_velocity - model.base_velocity
+    ) / model.acceleration_time
     fields = (
         ("DESC", model.description),
         ("EGU", model.egu),
@@ -161,10 +175,73 @@ def build_model_plan(axis: int, model_name: str, models_path: pathlib.Path
         ("HLM", stage_apply.format_value(model.high_limit)),
         ("VMAX", stage_apply.format_value(model.vmax)),
         ("VELO", stage_apply.format_value(model.default_velocity)),
+        ("JVEL", stage_apply.format_value(model.default_velocity)),
+        ("JAR", stage_apply.format_value(jog_acceleration)),
+        ("HVEL", stage_apply.format_value(model.default_velocity)),
         ("VBAS", stage_apply.format_value(model.base_velocity)),
         ("ACCL", stage_apply.format_value(model.acceleration_time)),
     )
     return stage_apply.AxisPlan(axis, model_name, fields)
+
+
+def plan_user_move(values: dict[str, str], mode: str, value: float) -> dict:
+    """Validate state and quantize one absolute or relative user target."""
+    if mode not in {"absolute", "relative"}:
+        raise ValueError("move mode must be absolute or relative")
+    if not math.isfinite(value):
+        raise ValueError("move value must be finite")
+    enabled = values["_able"] in {"Enable", "0"}
+    if not enabled:
+        raise ValueError("axis is Disabled")
+    if values[".SET"] not in {"Use", "0"}:
+        raise ValueError("axis motor record must be in SET=Use mode")
+    if values[".SPMG"] not in {"Go", "3"}:
+        raise ValueError("axis motor record must be in SPMG=Go mode")
+    if values[".DMOV"] not in {"1", "Yes", "Done"} or \
+            values[".MOVN"] in {"1", "Yes", "Active"}:
+        raise ValueError("axis must be stopped before a move")
+    if any(values[suffix] in {"1", "Yes", "Active"}
+           for suffix in (".HLS", ".LLS", ".LVIO")):
+        raise ValueError("axis limit is active")
+
+    current = Decimal(values[".RBV"])
+    requested_value = Decimal(str(value))
+    requested = requested_value if mode == "absolute" \
+        else current + requested_value
+    resolution = abs(Decimal(values[".MRES"]))
+    if not resolution.is_finite() or resolution <= 0:
+        raise ValueError("MRES must be finite and positive")
+    steps = ((requested - current) / resolution).to_integral_value(
+        rounding=ROUND_HALF_UP
+    )
+    target = current + steps * resolution
+    low = Decimal(values[".LLM"])
+    high = Decimal(values[".HLM"])
+    if target < low or target > high:
+        raise ValueError(f"quantized target {target} is outside {low}..{high}")
+    return {
+        "mode": mode,
+        "value": float(requested_value),
+        "current": float(current),
+        "requested": float(requested),
+        "target": float(target),
+        "egu": values[".EGU"],
+    }
+
+
+def plan_user_jog(values: dict[str, str], direction: str) -> dict:
+    """Validate a physical controller CW/CCW request and map through DIR."""
+    if direction not in {"cw", "ccw"}:
+        raise ValueError("JOG direction must be cw or ccw")
+    # Reuse the state checks without inventing a position move.  The current
+    # RBV target is always on its own MRES grid and inside the active limits.
+    plan_user_move(values, "absolute", float(values[".RBV"]))
+    direction_positive = values[".DIR"] in {"Pos", "0"}
+    forward = (direction == "cw") == direction_positive
+    relevant_limit = ".HLS" if forward else ".LLS"
+    if values[relevant_limit] in {"1", "Yes", "Active"}:
+        raise ValueError(f"cannot JOG toward active {relevant_limit} limit")
+    return {"direction": direction, "forward": forward, "egu": values[".EGU"]}
 
 
 class ModelApplicator:
@@ -193,7 +270,7 @@ class ModelApplicator:
             "axis": axis,
             "model": model_name,
             "record": f"{self.prefix}m{axis}",
-            "enabled": True,
+            "enabled": False,
         }
 
     def disable(self, axis: int) -> None:
@@ -204,177 +281,324 @@ class ModelApplicator:
         if self.client.get(pv, numeric_enum=True) != "1":
             raise ValueError(f"axis {axis}: Disable readback failed")
 
-    def read_status(self, axis: int) -> dict:
-        """Read one panel's fixed status allowlist in one CA invocation."""
-        record = f"{self.prefix}m{axis}"
-        pvs = [
-            record + suffix if suffix != "_able" else record + "_able"
-            for suffix in STATUS_SUFFIXES
-        ]
-        result = subprocess.run(
-            [str(self.client.caget), "-t", "-S", *pvs], check=True,
-            capture_output=True, text=True, timeout=5.0,
-        )
-        values = result.stdout.splitlines()
-        if len(values) != len(pvs):
-            raise ValueError("unexpected panel status value count")
-        return dict(zip(STATUS_SUFFIXES, values))
-
-
 class PanelManager:
-    """Synchronize browser panels, assignments and IOC enable state."""
+    """Own persistent panel sessions and serialize each axis's commands."""
 
-    def __init__(self, store: AssignmentStore, applicator: ModelApplicator):
-        self.store = store
-        self.applicator = applicator
+    def __init__(self, store, applicator, motion=None, *, session_factory=None,
+                 update_callback=None):
+        self.store, self.applicator, self.motion = store, applicator, motion
+        self.session_factory = session_factory or AxisSession
+        self.update_callback = update_callback
         self.lock = threading.RLock()
-        self.active: dict[int, dict] = {}
+        self.active = {}
+        self.sessions = {}
+        self.moving_axes, self.jogging_axes = set(), set()
 
-    def restore(self) -> None:
-        """Apply and enable all persistent model assignments at GUI startup."""
-        restored = []
+    @staticmethod
+    def _log(axis, message):
+        print(f"GUI axis {axis}: {message}", flush=True)
+
+    @staticmethod
+    def _is_on(value):
+        return value in {"1", "Yes", "Active"}
+
+    def _session(self, axis):
         try:
-            for assignment in self.store.panels():
-                result = self.applicator.apply(
-                    assignment["axis"], assignment["model"])
-                restored.append(assignment["axis"])
-                self.store.set_enabled(assignment["axis"], True)
-                self.active[assignment["axis"]] = result
+            return self.sessions[axis]
+        except KeyError:
+            raise ValueError(f"axis {axis}: panel does not exist") from None
+
+    def _activate(self, axis, model):
+        result = self.applicator.apply(axis, model)
+        session = self.session_factory(
+            axis, self.applicator.prefix, update_callback=self.update_callback)
+        try:
+            session.put("_able", "Enable")
+            self.store.assign(axis, model, enabled=True)
+            result["enabled"] = True
+            self.sessions[axis], self.active[axis] = session, result
+            if self.motion is not None:
+                self.motion.register_motor(axis, session.motor)
+            self._log(axis, f"panel ready, model={model}")
+            return result
         except BaseException:
-            for axis in restored:
-                try:
-                    self.applicator.disable(axis)
-                finally:
-                    self.store.set_enabled(axis, False)
+            session.close()
+            self.applicator.disable(axis)
             raise
 
-    def list(self) -> list[dict]:
-        with self.lock:
-            return [self.active[axis] for axis in sorted(self.active)]
+    def restore(self):
+        for item in self.store.panels():
+            self._activate(item["axis"], item["model"])
 
-    def status(self, axis: int) -> dict:
+    def list(self):
         with self.lock:
-            if axis not in self.active:
-                raise ValueError(f"axis {axis}: panel does not exist")
-        return {
-            "axis": axis,
-            "values": self.applicator.read_status(axis),
-        }
+            return [self.active[a] for a in sorted(self.active)]
 
-    def create(self, axis: int, model: str) -> dict:
+    def snapshots(self):
+        with self.lock:
+            return {str(a): s.snapshot() for a, s in self.sessions.items()}
+
+    def create(self, axis, model):
         with self.lock:
             if axis in self.active:
                 raise ValueError(f"axis {axis}: panel already exists")
-            result = self.applicator.apply(axis, model)
-            try:
-                self.store.assign(axis, model, enabled=True)
-            except BaseException:
-                self.applicator.disable(axis)
-                raise
-            self.active[axis] = result
-            return result
+            return self._activate(axis, model)
 
-    def delete(self, axis: int) -> dict:
+    def stop(self, axis):
+        session = self._session(axis)
+        session.stop()
         with self.lock:
-            if axis not in self.active:
-                raise ValueError(f"axis {axis}: panel does not exist")
-            self.applicator.disable(axis)
-            self.store.remove(axis)
+            self.jogging_axes.discard(axis)
+        self._log(axis, "STOP requested")
+        return {"axis": axis, "stopped": True}
+
+    def jog_start(self, axis, direction):
+        session = self._session(axis)
+        with session.command_lock:
+            if axis in self.moving_axes or axis in self.jogging_axes:
+                raise ValueError(f"axis {axis}: a motion request is already active")
+            request = plan_user_jog(session.snapshot(), direction)
+            session.jog(forward=request["forward"])
+            self.jogging_axes.add(axis)
+        self._log(axis, f"{direction.upper()} JOG started")
+        return {"axis": axis, "jogging": True, **request}
+
+    def jog_stop(self, axis):
+        result = self.stop(axis)
+        result["jogging"] = False
+        return result
+
+    def move(self, axis, mode, value):
+        session = self._session(axis)
+        with session.command_lock:
+            if axis in self.moving_axes or axis in self.jogging_axes:
+                raise ValueError(f"axis {axis}: a motion request is already active")
+            request = plan_user_move(session.snapshot(), mode, value)
+            self.moving_axes.add(axis)
+            future = self.motion.submit(axis, request["target"])
+        try:
+            future.result()
+            final = session.snapshot()
+            return {"axis": axis, **request, "final": float(final[".RBV"]),
+                    "done": final[".DMOV"] in {"1", "Yes", "Done"}}
+        finally:
+            self.moving_axes.discard(axis)
+
+    def write_field(self, axis, suffix, value):
+        session = self._session(axis)
+        if suffix in NUMERIC_WRITABLE_FIELDS:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) \
+                    or not math.isfinite(float(value)):
+                raise ValueError(f"{suffix} requires a finite numeric value")
+            if suffix in INTEGER_WRITABLE_FIELDS and float(value) != int(value):
+                raise ValueError(f"{suffix} requires an integer value")
+            requested = int(value) if suffix in INTEGER_WRITABLE_FIELDS else float(value)
+        elif suffix in ENUM_WRITABLE_FIELDS:
+            if value not in ENUM_WRITABLE_FIELDS[suffix]:
+                raise ValueError(f"invalid {suffix} value")
+            requested = value
+        else:
+            raise ValueError(f"field {suffix!r} is not writable from this GUI")
+        with session.command_lock:
+            status = session.snapshot()
+            if axis in self.moving_axes or axis in self.jogging_axes or \
+                    self._is_on(status[".MOVN"]):
+                raise ValueError(f"axis {axis}: must be stopped before field edit")
+            if suffix in COORDINATE_WRITABLE_FIELDS and \
+                    status[".SET"] not in {"Set", "1"}:
+                raise ValueError(f"axis {axis}: {suffix} edit requires SET=Set mode")
+            session.put(suffix, requested)
+        return {"axis": axis, "field": suffix, "requested": requested}
+
+    def delete(self, axis):
+        with self.lock:
+            session = self._session(axis)
+            if axis in self.moving_axes or axis in self.jogging_axes:
+                raise ValueError(f"axis {axis}: cannot delete during motion")
+            session.put("_able", "Disable")
+            if self.motion is not None:
+                self.motion.unregister_motor(axis)
+            session.close()
             removed = self.active.pop(axis)
+            self.sessions.pop(axis)
+            self.store.remove(axis)
             return {"axis": axis, "model": removed["model"], "enabled": False}
 
-    def shutdown(self) -> list[str]:
-        """Disable every panel axis and preserve its model for next startup."""
+    def stop_axes(self, axes):
+        for axis in set(axes):
+            if axis in self.sessions:
+                self.stop(axis)
+
+    def shutdown(self):
         errors = []
-        with self.lock:
-            for axis in sorted(self.active):
-                try:
-                    self.applicator.disable(axis)
-                except BaseException as error:
-                    errors.append(f"axis {axis} Disable failed: {error}")
-                try:
-                    self.store.set_enabled(axis, False)
-                except BaseException as error:
-                    errors.append(f"axis {axis} assignment update failed: {error}")
-            self.active.clear()
+        for axis in list(self.sessions):
+            try:
+                self.stop(axis)
+                self.sessions[axis].put("_able", "Disable")
+                self.store.set_enabled(axis, False)
+                self.sessions[axis].close()
+            except BaseException as error:
+                errors.append(f"axis {axis}: {error}")
+        self.sessions.clear(); self.active.clear()
+        if self.motion is not None:
+            try: self.motion.close()
+            except BaseException as error: errors.append(str(error))
         return errors
 
 
-class GuiHandler(SimpleHTTPRequestHandler):
-    """Serve static assets and the one minimal model-apply endpoint."""
+class PanelRequest(BaseModel):
+    axis: int
+    model: str
 
-    server_version = "KohzuLocalGui/0.2"
 
-    def send_json(self, value: dict, status: HTTPStatus = HTTPStatus.OK) -> None:
-        payload = json.dumps(value, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(payload)
+class EventHub:
+    """Bridge CA callback threads to all connected browser WebSockets."""
 
-    def do_GET(self) -> None:  # noqa: N802
-        path = urlparse(self.path).path
-        if path == "/api/config":
-            value = dict(self.server.gui_config)
-            value["prefix"] = self.server.manager.applicator.prefix
-            value["token"] = self.server.write_token
-            value["panels"] = self.server.manager.list()
-            self.send_json(value)
-            return
-        status_match = PANEL_STATUS_PATH.fullmatch(path)
-        if status_match:
+    def __init__(self):
+        self.loop = None
+        self.clients = set()
+        self.jog_owners = {}
+
+    def publish_from_thread(self, axis, values):
+        if self.loop is not None:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast({"type": "axis_update", "axis": axis,
+                                "values": values}), self.loop)
+
+    async def broadcast(self, message):
+        dead = []
+        for client in tuple(self.clients):
+            try: await client.send_json(message)
+            except Exception: dead.append(client)
+        for client in dead: self.clients.discard(client)
+
+
+def create_app(manager, gui_config, token):
+    hub = EventHub()
+    manager.update_callback = hub.publish_from_thread
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        hub.loop = asyncio.get_running_loop()
+        await asyncio.to_thread(manager.restore)
+        yield
+        for message in await asyncio.to_thread(manager.shutdown):
+            print(f"KOHZU GUI shutdown warning: {message}", file=sys.stderr)
+
+    app = FastAPI(lifespan=lifespan)
+
+    def authorize(value):
+        if not value or not secrets.compare_digest(value, token):
+            raise HTTPException(403, "invalid write token")
+
+    @app.get("/")
+    async def index():
+        return FileResponse(PROJECT / "gui" / "static" / "index.html")
+
+    @app.get("/api/config")
+    async def config():
+        return {**gui_config, "prefix": manager.applicator.prefix,
+                "token": token, "panels": manager.list()}
+
+    @app.post("/api/panels")
+    async def create_panel(body: PanelRequest, x_kohzu_token: str = Header("")):
+        authorize(x_kohzu_token)
+        try:
+            result = await asyncio.to_thread(manager.create, body.axis, body.model)
+            await hub.broadcast({"type": "panel_ready", "panel": result})
+            await hub.broadcast({"type": "axis_update", "axis": body.axis,
+                                 "values": manager.sessions[body.axis].snapshot()})
+            return result
+        except Exception as error:
+            raise HTTPException(502, str(error)) from error
+
+    @app.delete("/api/panels/{axis}")
+    async def delete_panel(axis: int, x_kohzu_token: str = Header("")):
+        authorize(x_kohzu_token)
+        try:
+            result = await asyncio.to_thread(manager.delete, axis)
+            await hub.broadcast({"type": "panel_removed", "axis": axis})
+            return result
+        except Exception as error:
+            raise HTTPException(502, str(error)) from error
+
+    @app.websocket("/ws")
+    async def websocket(websocket: WebSocket):
+        supplied = websocket.query_params.get("token", "")
+        if not secrets.compare_digest(supplied, token):
+            await websocket.close(code=1008); return
+        await websocket.accept(); hub.clients.add(websocket)
+        await websocket.send_json({"type": "hello", "panels": manager.list(),
+                                   "snapshots": manager.snapshots()})
+        send_lock = asyncio.Lock()
+        background = set()
+        controlled_axes = set()
+
+        async def run_move(command):
             try:
-                self.send_json(
-                    self.server.manager.status(int(status_match.group(1))))
-            except (ValueError, subprocess.SubprocessError, OSError) as error:
-                self.send_json(
-                    {"error": str(error)}, HTTPStatus.SERVICE_UNAVAILABLE)
-            return
-        if path == "/":
-            self.path = "/index.html"
-        super().do_GET()
+                result = await asyncio.to_thread(
+                    manager.move, command["axis"], command.get("mode"),
+                    command.get("value"))
+                message = {"type": "command_result", "id": command.get("id"),
+                           "result": result}
+            except Exception as error:
+                message = {"type": "command_error", "id": command.get("id"),
+                           "error": str(error)}
+            async with send_lock:
+                await websocket.send_json(message)
 
-    def do_POST(self) -> None:  # noqa: N802
-        if urlparse(self.path).path != PANEL_PATH:
-            self.send_json({"error": "unsupported endpoint"}, HTTPStatus.NOT_FOUND)
-            return
-        if not secrets.compare_digest(
-                self.headers.get("X-Kohzu-Token", ""), self.server.write_token):
-            self.send_json({"error": "invalid write token"}, HTTPStatus.FORBIDDEN)
-            return
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length < 1 or length > 1024:
-                raise ValueError("invalid request body length")
-            body = json.loads(self.rfile.read(length).decode("utf-8"))
-            axis = body.get("axis")
-            model = body.get("model")
-            if not isinstance(axis, int) or not isinstance(model, str):
-                raise ValueError("axis must be an integer and model must be text")
-            self.send_json(self.server.manager.create(axis, model))
-        except (ValueError, subprocess.SubprocessError, OSError) as error:
-            self.send_json({"error": str(error)}, HTTPStatus.BAD_GATEWAY)
-        except (json.JSONDecodeError, UnicodeDecodeError) as error:
-            self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+            while True:
+                command = await websocket.receive_json()
+                request_id = command.get("id")
+                kind, axis = command.get("type"), command.get("axis")
+                if not isinstance(axis, int):
+                    raise ValueError("command axis must be an integer")
+                controlled_axes.add(axis)
+                if kind == "jog_start":
+                    result = await asyncio.to_thread(
+                        manager.jog_start, axis, command.get("direction"))
+                    hub.jog_owners[axis] = websocket
+                elif kind == "jog_stop":
+                    result = await asyncio.to_thread(manager.jog_stop, axis)
+                    hub.jog_owners.pop(axis, None)
+                elif kind == "stop":
+                    result = await asyncio.to_thread(manager.stop, axis)
+                    hub.jog_owners.pop(axis, None)
+                elif kind == "move":
+                    task = asyncio.create_task(run_move(dict(command)))
+                    background.add(task)
+                    task.add_done_callback(background.discard)
+                    continue
+                elif kind == "field_write":
+                    result = await asyncio.to_thread(
+                        manager.write_field, axis, command.get("field"),
+                        command.get("value"))
+                else:
+                    raise ValueError(f"unsupported command {kind!r}")
+                async with send_lock:
+                    await websocket.send_json({"type": "command_result",
+                                               "id": request_id, "result": result})
+        except WebSocketDisconnect:
+            pass
+        except Exception as error:
+            try: await websocket.send_json({"type": "command_error",
+                                            "id": command.get("id"),
+                                            "error": str(error)})
+            except Exception: pass
+        finally:
+            hub.clients.discard(websocket)
+            owned = [a for a, owner in hub.jog_owners.items() if owner is websocket]
+            await asyncio.to_thread(
+                manager.stop_axes,
+                set(owned) | (controlled_axes & manager.moving_axes),
+            )
+            for axis in owned: hub.jog_owners.pop(axis, None)
+            if background:
+                await asyncio.gather(*background, return_exceptions=True)
 
-    def do_DELETE(self) -> None:  # noqa: N802
-        match = PANEL_ITEM_PATH.fullmatch(urlparse(self.path).path)
-        if not match:
-            self.send_json({"error": "unsupported endpoint"}, HTTPStatus.NOT_FOUND)
-            return
-        if not secrets.compare_digest(
-                self.headers.get("X-Kohzu-Token", ""), self.server.write_token):
-            self.send_json({"error": "invalid write token"}, HTTPStatus.FORBIDDEN)
-            return
-        try:
-            self.send_json(self.server.manager.delete(int(match.group(1))))
-        except (ValueError, subprocess.SubprocessError, OSError) as error:
-            self.send_json({"error": str(error)}, HTTPStatus.BAD_GATEWAY)
-
-    def log_message(self, message: str, *args) -> None:
-        print(f"GUI {self.client_address[0]}: " + message % args)
+    app.mount("/", StaticFiles(directory=PROJECT / "gui" / "static"), name="static")
+    return app
 
 
 def main() -> int:
@@ -384,6 +608,8 @@ def main() -> int:
                         default=runtime_path)
     parser.add_argument("--listen", default=runtime.gui_listen)
     parser.add_argument("--port", type=int, default=runtime.gui_port)
+    parser.add_argument("--move-timeout", type=float,
+                        default=runtime.gui_move_timeout)
     parser.add_argument("--prefix", default=runtime.epics_prefix)
     parser.add_argument("--models", type=pathlib.Path,
                         default=PROJECT / "config" / "stage-models.ini")
@@ -397,20 +623,21 @@ def main() -> int:
             raise ValueError("GUI listen address must not be empty")
         if not 1 <= arguments.port <= 65535:
             raise ValueError("GUI port must be between 1 and 65535")
+        if arguments.move_timeout <= 0:
+            raise ValueError("GUI move timeout must be greater than zero")
         if not PREFIX_PATTERN.fullmatch(arguments.prefix):
             raise ValueError("invalid PV prefix")
         gui_config = load_gui_configuration(arguments.models)
         applicator = ModelApplicator(
             arguments.epics_bin, arguments.prefix, arguments.models)
+        from kohzu_motion import BlueskyMotionExecutor
         manager = PanelManager(
-            AssignmentStore(arguments.axes, arguments.models), applicator)
-        manager.restore()
-        handler = lambda *values, **kwargs: GuiHandler(  # noqa: E731
-            *values, directory=str(PROJECT / "gui" / "static"), **kwargs)
-        server = ThreadingHTTPServer((arguments.listen, arguments.port), handler)
-        server.gui_config = gui_config
-        server.manager = manager
-        server.write_token = secrets.token_urlsafe(32)
+            AssignmentStore(arguments.axes, arguments.models), applicator,
+            BlueskyMotionExecutor(
+                arguments.prefix, move_timeout=arguments.move_timeout),
+        )
+        write_token = secrets.token_urlsafe(32)
+        app = create_app(manager, gui_config, write_token)
         if arguments.listen not in {"127.0.0.1", "::1", "localhost"}:
             print(
                 "WARNING: GUI is exposed beyond loopback without user "
@@ -418,20 +645,8 @@ def main() -> int:
                 file=sys.stderr,
             )
         print(f"KOHZU GUI listening on http://{arguments.listen}:{arguments.port}")
-        previous_term = signal.getsignal(signal.SIGTERM)
-        signal.signal(
-            signal.SIGTERM,
-            lambda _signum, _frame: (_ for _ in ()).throw(KeyboardInterrupt()),
-        )
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            print("KOHZU GUI shutdown requested")
-        finally:
-            server.server_close()
-            for message in manager.shutdown():
-                print(f"KOHZU GUI shutdown warning: {message}", file=sys.stderr)
-            signal.signal(signal.SIGTERM, previous_term)
+        uvicorn.run(app, host=arguments.listen, port=arguments.port,
+                    log_level="info", access_log=False)
     except (ValueError, configparser.Error, OSError) as error:
         print(f"Cannot start KOHZU GUI: {error}", file=sys.stderr)
         return 1

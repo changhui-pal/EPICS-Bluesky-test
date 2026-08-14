@@ -61,6 +61,9 @@ def build_plans(models_path: pathlib.Path, axes_path: pathlib.Path,
         model = models[model_name]
         direction = section["direction"].strip()
         home_method = section.getint("home_method", fallback=4)
+        jog_acceleration = (
+            model.default_velocity - model.base_velocity
+        ) / model.acceleration_time
         fields = (
             ("DESC", model.description),
             ("EGU", model.egu),
@@ -70,6 +73,9 @@ def build_plans(models_path: pathlib.Path, axes_path: pathlib.Path,
             ("HLM", format_value(model.high_limit)),
             ("VMAX", format_value(model.vmax)),
             ("VELO", format_value(model.default_velocity)),
+            ("JVEL", format_value(model.default_velocity)),
+            ("JAR", format_value(jog_acceleration)),
+            ("HVEL", format_value(model.default_velocity)),
             ("VBAS", format_value(model.base_velocity)),
             ("ACCL", format_value(model.acceleration_time)),
             (":OriginMethod", str(home_method)),
@@ -135,7 +141,15 @@ def require_disabled_and_stopped(client: ChannelAccess, prefix: str,
 def apply_plans(client: ChannelAccess, prefix: str,
                 plans: Sequence[AxisPlan], *,
                 development_guards: bool = False) -> None:
-    """Write/read model fields; optionally retain the old commissioning guards."""
+    """Apply model fields without deferring MRES processing to first motion.
+
+    SDIS keeps motor-record special processing pending while ``_able`` is
+    Disable.  In particular, a pending MRES change makes the next process call
+    issue LOAD_POS and can translate OFF and user limits.  Apply each model in
+    SET mode while record processing is temporarily enabled;
+    this consumes the MRES change through GET_INFO without writing a controller
+    position.  Every exit path returns the axis to Disable.
+    """
     if development_guards:
         require_disabled_and_stopped(client, prefix, plans)
     else:
@@ -149,6 +163,11 @@ def apply_plans(client: ChannelAccess, prefix: str,
                 )
     for plan in plans:
         record = f"{prefix}m{plan.axis}"
+        able_pv = f"{record}_able"
+        original_set = client.get(f"{record}.SET", numeric_enum=True)
+        if original_set not in {"0", "1"}:
+            raise ValueError(
+                f"axis {plan.axis}: unexpected SET state {original_set!r}")
         # DEVELOPMENT SAFETY GUARDS (disabled by default): keep this path for
         # later experiments without making commissioning PVs operational gates.
         if development_guards:
@@ -161,25 +180,48 @@ def apply_plans(client: ChannelAccess, prefix: str,
                 if client.get(pv, numeric_enum=True) != "0":
                     raise ValueError(
                         f"axis {plan.axis}: failed to reset commissioning {flag}")
-        for suffix, value in plan.fields:
-            pv = (record + suffix if suffix.startswith(":")
-                  else record + "." + suffix)
-            client.put(pv, value)
-            actual = client.get(pv)
-            if suffix in ("DESC", "EGU", "DIR"):
-                matches = actual == value
-            else:
-                try:
-                    matches = math.isclose(float(actual), float(value),
-                                           rel_tol=1e-10, abs_tol=1e-12)
-                except ValueError:
-                    matches = False
-            if not matches:
+        primary_error = None
+        try:
+            client.put(f"{record}.SET", "Set")
+            client.put(able_pv, "Enable")
+            if client.get(able_pv, numeric_enum=True) != "0":
                 raise ValueError(
-                    f"axis {plan.axis}: {suffix} readback {actual!r} "
-                    f"does not match {value!r}")
+                    f"axis {plan.axis}: temporary Enable failed during apply")
+            for suffix, value in plan.fields:
+                pv = (record + suffix if suffix.startswith(":")
+                      else record + "." + suffix)
+                client.put(pv, value)
+                actual = client.get(pv)
+                if suffix in ("DESC", "EGU", "DIR"):
+                    matches = actual == value
+                else:
+                    try:
+                        matches = math.isclose(float(actual), float(value),
+                                               rel_tol=1e-10, abs_tol=1e-12)
+                    except ValueError:
+                        matches = False
+                if not matches:
+                    raise ValueError(
+                        f"axis {plan.axis}: {suffix} readback {actual!r} "
+                        f"does not match {value!r}")
+        except BaseException as error:
+            primary_error = error
+            raise
+        finally:
+            cleanup_errors = []
+            try:
+                client.put(f"{record}.SET", "Set" if original_set == "1" else "Use")
+            except BaseException as error:
+                cleanup_errors.append(f"SET restore failed: {error}")
+            try:
+                client.put(able_pv, "Disable")
+            except BaseException as error:
+                cleanup_errors.append(f"Disable restore failed: {error}")
+            if cleanup_errors and primary_error is None:
+                raise ValueError(
+                    f"axis {plan.axis}: " + "; ".join(cleanup_errors))
         if development_guards:
-            if client.get(f"{record}_able", numeric_enum=True) != "1":
+            if client.get(able_pv, numeric_enum=True) != "1":
                 raise ValueError(
                     f"axis {plan.axis}: unexpectedly enabled during apply")
             applied_pv = f"{record}:Commissioning:ConfigApplied"

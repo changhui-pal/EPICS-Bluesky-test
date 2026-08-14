@@ -25,6 +25,7 @@ O.*/
 /.vscode/
 *.orig
 *.log
+/logs/kohzu-control/
 .*.swp
 .DS_Store
 __pycache__/

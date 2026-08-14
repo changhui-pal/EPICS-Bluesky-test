@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 
-from ophyd import Component as Cpt, EpicsMotor, EpicsSignalRO
+from ophyd import Component as Cpt, EpicsMotor, EpicsSignal, EpicsSignalRO
 
 
 class SafeStopEpicsMotor(EpicsMotor):
@@ -22,8 +22,47 @@ class SafeStopEpicsMotor(EpicsMotor):
     the explicit stop has detached and completed the active status.
     """
 
-    limit_violation = Cpt(EpicsSignalRO, ".LVIO", kind="omitted")
-    enabled = Cpt(EpicsSignalRO, "_able", kind="omitted")
+    # ``_able`` is a GUI-owned soft enable record.  It is writable because a
+    # panel session enables it only after every monitored motor PV is connected
+    # and disables it before the session is removed.
+    enabled = Cpt(EpicsSignal, "_able", kind="omitted", auto_monitor=True)
+    jog_forward = Cpt(EpicsSignal, ".JOGF", kind="omitted")
+    jog_reverse = Cpt(EpicsSignal, ".JOGR", kind="omitted")
+
+    # Persistent GUI signals.  Keeping these on the motor object means CA
+    # channels and subscriptions are created once per panel, not once per HTTP
+    # request or screen refresh.
+    limit_violation = Cpt(EpicsSignalRO, ".LVIO", kind="omitted", auto_monitor=True)
+    jog_velocity = Cpt(EpicsSignal, ".JVEL", kind="config", auto_monitor=True)
+    jog_acceleration = Cpt(EpicsSignal, ".JAR", kind="config", auto_monitor=True)
+    home_velocity = Cpt(EpicsSignal, ".HVEL", kind="config", auto_monitor=True)
+    max_velocity = Cpt(EpicsSignal, ".VMAX", kind="config", auto_monitor=True)
+    base_velocity = Cpt(EpicsSignal, ".VBAS", kind="config", auto_monitor=True)
+    tweak_value = Cpt(EpicsSignal, ".TWV", kind="config", auto_monitor=True)
+    backlash_distance = Cpt(EpicsSignal, ".BDST", kind="config", auto_monitor=True)
+    backlash_velocity = Cpt(EpicsSignal, ".BVEL", kind="config", auto_monitor=True)
+    backlash_acceleration = Cpt(EpicsSignal, ".BACC", kind="config", auto_monitor=True)
+    retry_deadband = Cpt(EpicsSignal, ".RDBD", kind="config", auto_monitor=True)
+    retry_count = Cpt(EpicsSignal, ".RTRY", kind="config", auto_monitor=True)
+    settle_delay = Cpt(EpicsSignal, ".DLY", kind="config", auto_monitor=True)
+    move_fraction = Cpt(EpicsSignal, ".FRAC", kind="config", auto_monitor=True)
+    motor_resolution = Cpt(EpicsSignal, ".MRES", kind="config", auto_monitor=True)
+    display_precision = Cpt(EpicsSignal, ".PREC", kind="config", auto_monitor=True)
+    units_per_revolution = Cpt(EpicsSignal, ".UREV", kind="config", auto_monitor=True)
+    steps_per_revolution = Cpt(EpicsSignal, ".SREV", kind="config", auto_monitor=True)
+    encoder_resolution = Cpt(EpicsSignal, ".ERES", kind="config", auto_monitor=True)
+    readback_resolution = Cpt(EpicsSignal, ".RRES", kind="config", auto_monitor=True)
+    use_encoder = Cpt(EpicsSignal, ".UEIP", kind="config", auto_monitor=True)
+    use_readback_link = Cpt(EpicsSignal, ".URIP", kind="config", auto_monitor=True)
+    spmg = Cpt(EpicsSignal, ".SPMG", kind="config", auto_monitor=True)
+    dial_setpoint = Cpt(EpicsSignal, ".DVAL", kind="omitted", auto_monitor=True)
+    dial_readback = Cpt(EpicsSignalRO, ".DRBV", kind="omitted", auto_monitor=True)
+    raw_setpoint = Cpt(EpicsSignal, ".RVAL", kind="omitted", auto_monitor=True)
+    raw_readback = Cpt(EpicsSignalRO, ".RRBV", kind="omitted", auto_monitor=True)
+    motor_status = Cpt(EpicsSignalRO, ".MSTA", kind="omitted", auto_monitor=True)
+    origin_method = Cpt(
+        EpicsSignalRO, ":OriginMethodSelectedRBV", kind="omitted", auto_monitor=True
+    )
 
     def __init__(self, *args, **kwargs):
         # A DMOV monitor may call _done_moving from another CA callback thread.

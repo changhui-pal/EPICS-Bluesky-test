@@ -46,9 +46,11 @@ epicsThreadSleep(0.1)
 
 # Exercise absolute and relative Model 3 moves after Method 10 establishes 0.
 dbpf "MOCK:m1.VAL" 1000
-epicsThreadSleep(0.2)
+# The mock now exposes an actual moving interval; wait for the first finite
+# move to finish before asking the motor record for the relative move.
+epicsThreadSleep(1.5)
 dbpf "MOCK:m1.RLV" 50
-epicsThreadSleep(0.2)
+epicsThreadSleep(1.5)
 dbgf "MOCK:m1:MoveStatus"
 
 # Hold forward JOG briefly. Model 3 passes positive velocity to FRP/CW; release

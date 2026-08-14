@@ -142,20 +142,45 @@ if pgrep -f '[k]ohzu_gui_server\.py' >/dev/null; then
     exit 1
 fi
 
-run_dir="$(mktemp -d /tmp/kohzu-control.XXXXXX)"
-ioc_log="${run_dir}/ioc.log"
-gui_log="${run_dir}/gui.log"
-ioc_input="${run_dir}/ioc.stdin"
+log_root="${project_dir}/logs/kohzu-control"
+session_name="$(date '+%Y%m%d-%H%M%S')-$$"
+log_dir="${log_root}/${session_name}"
+runtime_dir="$(mktemp -d /tmp/kohzu-control-runtime.XXXXXX)"
+ioc_log="${log_dir}/ioc.log"
+gui_log="${log_dir}/gui.log"
+apply_log="${log_dir}/apply.log"
+launcher_log_file="${log_dir}/launcher.log"
+session_log="${log_dir}/session.log"
+ioc_input="${runtime_dir}/ioc.stdin"
 ioc_pid=""
 gui_pid=""
+follower_pid=""
 cleaning=0
+mkdir -p "${log_dir}"
+touch "${ioc_log}" "${gui_log}" "${apply_log}" \
+      "${launcher_log_file}" "${session_log}"
+ln -sfn "${session_name}" "${log_root}/latest"
 mkfifo "${ioc_input}"
 # Open both ends in the launcher so the IOC shell never observes EOF while it
 # runs in the background. The same descriptor sends a normal `exit` at cleanup.
 exec {ioc_input_fd}<>"${ioc_input}"
 
+python3 "${project_dir}/tools/follow_control_logs.py" \
+    --session "${session_log}" \
+    --source "IOC=${ioc_log}" \
+    --source "APPLY=${apply_log}" \
+    --source "GUI=${gui_log}" &
+follower_pid=$!
+
+launcher_log() {
+    local rendered
+    rendered="$(date '+%Y-%m-%dT%H:%M:%S.%3N%:z') [LAUNCHER] $*"
+    printf '%s\n' "${rendered}" | tee -a \
+        "${launcher_log_file}" "${session_log}"
+}
+
 cleanup() {
-    local status=$?
+    local status="${1:-$?}"
     if ((cleaning)); then
         return
     fi
@@ -163,12 +188,12 @@ cleanup() {
     trap - INT TERM EXIT
 
     if [[ -n "${gui_pid}" ]] && kill -0 "${gui_pid}" 2>/dev/null; then
-        printf '%s\n' 'Stopping GUI and disabling its panel axes...'
+        launcher_log 'Stopping GUI and disabling its panel axes...'
         kill -TERM "${gui_pid}" 2>/dev/null || true
         wait "${gui_pid}" 2>/dev/null || true
     fi
     if [[ -n "${ioc_pid}" ]] && kill -0 "${ioc_pid}" 2>/dev/null; then
-        printf '%s\n' 'Stopping IOC...'
+        launcher_log 'Stopping IOC...'
         printf 'exit\n' >&"${ioc_input_fd}" 2>/dev/null || true
         for _ in {1..20}; do
             if ! kill -0 "${ioc_pid}" 2>/dev/null; then
@@ -182,16 +207,22 @@ cleanup() {
         wait "${ioc_pid}" 2>/dev/null || true
     fi
     exec {ioc_input_fd}>&-
+    rm -f -- "${ioc_input}"
+    rmdir -- "${runtime_dir}" 2>/dev/null || true
 
     if ((status == 0)); then
-        rm -f -- "${ioc_log}" "${gui_log}" "${ioc_input}"
-        rmdir -- "${run_dir}" 2>/dev/null || true
+        launcher_log "Session completed; logs retained in ${log_dir}"
     else
-        printf 'Startup/runtime logs retained in %s\n' "${run_dir}" >&2
+        launcher_log "Session failed with status ${status}; logs retained in ${log_dir}"
+    fi
+    if [[ -n "${follower_pid}" ]] && kill -0 "${follower_pid}" 2>/dev/null; then
+        kill -TERM "${follower_pid}" 2>/dev/null || true
+        wait "${follower_pid}" 2>/dev/null || true
     fi
     exit "${status}"
 }
-trap cleanup INT TERM EXIT
+trap 'cleanup 0' INT TERM
+trap cleanup EXIT
 
 export EPICS_CA_AUTO_ADDR_LIST=NO
 export EPICS_CA_ADDR_LIST="${ca_addr_list}"
@@ -200,26 +231,27 @@ export KOHZU_CONTROLLER_PORT="${controller_port}"
 export KOHZU_PREFIX="${prefix}"
 
 if ((use_sudo)); then
-    printf '%s\n' 'Authenticating sudo for IOC startup...'
+    launcher_log 'Authenticating sudo for IOC startup...'
     sudo -v
     (
+        trap '' INT
         cd "${ioc_dir}"
         exec sudo --preserve-env=LD_LIBRARY_PATH,KOHZU_CONTROLLER_HOST,KOHZU_CONTROLLER_PORT,KOHZU_PREFIX ./st.cmd
     ) <&"${ioc_input_fd}" >"${ioc_log}" 2>&1 &
 else
     (
+        trap '' INT
         cd "${ioc_dir}"
         exec ./st.cmd
     ) <&"${ioc_input_fd}" >"${ioc_log}" 2>&1 &
 fi
 ioc_pid=$!
-printf 'IOC starting (PID %s, log %s)\n' "${ioc_pid}" "${ioc_log}"
+launcher_log "IOC starting (PID ${ioc_pid})"
 
 ioc_ready=0
 for _ in {1..100}; do
     if ! kill -0 "${ioc_pid}" 2>/dev/null; then
-        printf '%s\n' 'IOC exited during startup.' >&2
-        tail -n 80 "${ioc_log}" >&2 || true
+        launcher_log 'IOC exited during startup.'
         exit 1
     fi
     if "${epics_bin}/caget" -t "${prefix}m1.DMOV" >/dev/null 2>&1; then
@@ -229,20 +261,22 @@ for _ in {1..100}; do
     sleep 0.1
 done
 if ((ioc_ready == 0)); then
-    printf '%s\n' 'IOC PVs did not become available within 10 seconds.' >&2
-    tail -n 80 "${ioc_log}" >&2 || true
+    launcher_log 'IOC PVs did not become available within 10 seconds.'
     exit 1
 fi
 
-printf '%s\n' 'Applying persistent axis assignments...'
+launcher_log 'Applying persistent axis assignments...'
 "${python_command}" "${project_dir}/tools/stage_config_apply.py" \
     --runtime-config "${runtime_config}" --prefix "${prefix}" \
-    --epics-bin "${epics_bin}" --apply
+    --epics-bin "${epics_bin}" --apply >"${apply_log}" 2>&1
 
-"${python_command}" "${project_dir}/gui/kohzu_gui_server.py" \
-    --runtime-config "${runtime_config}" --prefix "${prefix}" \
-    --listen "${gui_listen}" --port "${gui_port}" \
-    --epics-bin "${epics_bin}" >"${gui_log}" 2>&1 &
+(
+    trap '' INT
+    exec "${python_command}" "${project_dir}/gui/kohzu_gui_server.py" \
+        --runtime-config "${runtime_config}" --prefix "${prefix}" \
+        --listen "${gui_listen}" --port "${gui_port}" \
+        --epics-bin "${epics_bin}"
+) >"${gui_log}" 2>&1 &
 gui_pid=$!
 
 gui_probe_host="${gui_listen}"
@@ -255,8 +289,7 @@ fi
 gui_ready=0
 for _ in {1..100}; do
     if ! kill -0 "${gui_pid}" 2>/dev/null; then
-        printf '%s\n' 'GUI server exited during startup.' >&2
-        cat "${gui_log}" >&2 || true
+        launcher_log 'GUI server exited during startup.'
         exit 1
     fi
     if curl --silent --fail "http://${gui_probe_host}:${gui_port}/api/config" \
@@ -267,13 +300,13 @@ for _ in {1..100}; do
     sleep 0.1
 done
 if ((gui_ready == 0)); then
-    printf '%s\n' 'GUI did not become available within 10 seconds.' >&2
-    cat "${gui_log}" >&2 || true
+    launcher_log 'GUI did not become available within 10 seconds.'
     exit 1
 fi
 
-printf '\nKOHZU control session is running.\n'
-printf 'GUI bind: http://%s:%s\n' "${gui_listen}" "${gui_port}"
-printf 'Press Ctrl-C to stop GUI first and IOC second.\n\n'
+launcher_log 'KOHZU control session is running.'
+launcher_log "GUI bind: http://${gui_listen}:${gui_port}"
+launcher_log "Live session log: ${session_log}"
+launcher_log 'Press Ctrl-C to stop GUI first and IOC second.'
 
 wait "${gui_pid}"

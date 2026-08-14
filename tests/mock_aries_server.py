@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Small ARIES simulator for driver integration tests.
 
-The simulator changes only in-memory pulse coordinates for validated APS/RPS
-and Method 10 ORG commands; it never connects to physical hardware.
+Validated APS/RPS moves interpolate in-memory pulse coordinates over time so
+the IOC observes realistic moving and completion transitions.  Method 10 ORG
+changes only coordinates; this program never connects to physical hardware.
 """
 
 import argparse
 import socket
+import time
 
 
 def send_line(connection: socket.socket, text: str) -> None:
@@ -20,7 +22,42 @@ def serve(host: str, port: int, emergency_axis: int = 6) -> None:
     # retains its value so the driver's mandatory RSY readback can catch it.
     origin_methods = {1: 4, 2: 10}
     positions = {axis: axis * 100 for axis in range(1, 7)}
-    moving = {axis: False for axis in range(1, 7)}
+    # A finite move must remain observable for long enough that the motor
+    # record sees MOVN=1 before completion.  Updating the position immediately
+    # and clearing motion after an arbitrary number of STR polls does not
+    # reproduce a real controller and can race the IOC poller.
+    motions = {axis: None for axis in range(1, 7)}
+    finite_move_seconds = 1.25
+
+    def sample_position(axis: int) -> int:
+        motion = motions[axis]
+        if motion is None:
+            return positions[axis]
+        if motion["target"] is None:  # continuous FRP until STP
+            return positions[axis]
+        now = time.monotonic()
+        fraction = min(1.0, (now - motion["started"]) / motion["duration"])
+        sampled = round(
+            motion["start"] + (motion["target"] - motion["start"]) * fraction
+        )
+        positions[axis] = sampled
+        if fraction >= 1.0:
+            positions[axis] = motion["target"]
+            motions[axis] = None
+        return positions[axis]
+
+    def start_move(axis: int, target: int) -> None:
+        start = sample_position(axis)
+        motions[axis] = {
+            "start": start,
+            "target": target,
+            "started": time.monotonic(),
+            "duration": finite_move_seconds,
+        }
+
+    def stop_move(axis: int) -> None:
+        sample_position(axis)
+        motions[axis] = None
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         listener.bind((host, port))
@@ -57,7 +94,7 @@ def serve(host: str, port: int, emergency_axis: int = 6) -> None:
                     elif command.startswith("RDP") and command[3:].isdigit():
                         axis = int(command[3:])
                         if 1 <= axis <= 6:
-                            send_line(connection, f"C\tRDP{axis}\t{positions[axis]}")
+                            send_line(connection, f"C\tRDP{axis}\t{sample_position(axis)}")
                         else:
                             send_line(connection, f"E\tRDP{axis}\t120")
                     elif command.startswith("STR") and command[3:].isdigit():
@@ -68,7 +105,8 @@ def serve(host: str, port: int, emergency_axis: int = 6) -> None:
                             # Axis 6 keeps physical EMG active so guarded REM
                             # is rejected. Axis 1 stays clear for HOME preflight.
                             emergency = 1 if axis == emergency_axis else 0
-                            drive = 1 if moving[axis] else 0
+                            sample_position(axis)
+                            drive = 1 if motions[axis] is not None else 0
                             send_line(connection, f"C\tSTR{axis}\t{drive}\t{emergency}\t2\t0\t0\t1")
                         else:
                             send_line(connection, f"E\tSTR{axis}\t120")
@@ -84,7 +122,7 @@ def serve(host: str, port: int, emergency_axis: int = 6) -> None:
                             # Log the exact wire command so the runner verifies
                             # that routine STOP never selects emergency mode 1.
                             print(f"RECEIVED {command}", flush=True)
-                            moving[int(axis_text)] = False
+                            stop_move(int(axis_text))
                             send_line(connection, f"C\tSTP{axis_text}")
                         else:
                             send_line(connection, f"E\tSTP{axis_text}\t120")
@@ -123,6 +161,7 @@ def serve(host: str, port: int, emergency_axis: int = 6) -> None:
                     elif command == "ORG1/0/1":
                         # Method 10 changes coordinates but performs no drive.
                         print(f"RECEIVED {command}", flush=True)
+                        motions[1] = None
                         positions[1] = 0
                         send_line(connection, "C\tORG1")
                     elif command == "ORG2/0/1":
@@ -133,7 +172,7 @@ def serve(host: str, port: int, emergency_axis: int = 6) -> None:
                     elif command.startswith("APS1/0/") and command.endswith("/1"):
                         target_text = command[len("APS1/0/"):-2]
                         if target_text.lstrip("-").isdigit():
-                            positions[1] = int(target_text)
+                            start_move(1, int(target_text))
                             print(f"RECEIVED {command}", flush=True)
                             send_line(connection, "C\tAPS1")
                         else:
@@ -141,7 +180,7 @@ def serve(host: str, port: int, emergency_axis: int = 6) -> None:
                     elif command.startswith("RPS1/0/") and command.endswith("/1"):
                         amount_text = command[len("RPS1/0/"):-2]
                         if amount_text.lstrip("-").isdigit():
-                            positions[1] += int(amount_text)
+                            start_move(1, sample_position(1) + int(amount_text))
                             print(f"RECEIVED {command}", flush=True)
                             send_line(connection, "C\tRPS1")
                         else:
@@ -149,7 +188,8 @@ def serve(host: str, port: int, emergency_axis: int = 6) -> None:
                     elif command in ("FRP1/0/0", "FRP1/0/1"):
                         # Continuous motion is represented by STR drive=1
                         # until the motor record releases JOG and sends STP/0.
-                        moving[1] = True
+                        sample_position(1)
+                        motions[1] = {"target": None}
                         print(f"RECEIVED {command}", flush=True)
                         send_line(connection, "C\tFRP1")
                     elif command.startswith("WRP1/"):
@@ -157,6 +197,7 @@ def serve(host: str, port: int, emergency_axis: int = 6) -> None:
                         if value_text.lstrip("-").isdigit():
                             value = int(value_text)
                             if -134217728 <= value <= 134217727:
+                                motions[1] = None
                                 positions[1] = value
                                 print(f"RECEIVED {command}", flush=True)
                                 send_line(connection, "C\tWRP1")

@@ -83,7 +83,8 @@ controller 주소, EPICS prefix/bin/CA 주소, Python 실행 파일과 GUI liste
 
 기본 브라우저 주소는 `http://127.0.0.1:8080`이다. 종료할 때 launcher 터미널에서 Ctrl-C를
 한 번 누르면 GUI가 먼저 활성 패널 축을 Disable하고 assignment를 저장한 뒤 IOC를
-종료한다. 비정상 시작 로그는 `/tmp/kohzu-control.*`에 남는다.
+종료한다. 모든 실행 로그는 `logs/kohzu-control/<실행시각>-<PID>/`에 보존되고
+`logs/kohzu-control/latest`가 마지막 실행을 가리킨다.
 
 저장소 디렉터리를 옮기거나 이름을 바꾸면 EPICS 실행 파일의 RUNPATH와 `envPaths`가 이전
 절대 경로를 가리킬 수 있다. `TOP ... was built with TOP ...` 경고 또는 shared library
@@ -429,8 +430,44 @@ python3 gui/kohzu_gui_server.py
 Enable하고 assignment에 저장한다. `DIR`과 OriginMethod는 축 고유 설정이므로 변경하지
 않는다. 삭제는 축을 Disable하고 assignment의 모델을 제거한다. 정상적인 웹서버 종료는
 모든 패널 축을 Disable하되 모델을 보존하며, 다음 시작 때 패널을 자동 복원한다. 현재
-GUI는 사용자·dial·raw 위치와 기본 motor 상태를 읽기 전용으로 표시하지만 이동, HOME,
-commissioning, 진단 또는 recovery 명령은 제공하지 않는다.
+GUI는 사용자·dial·raw 위치와 기본 motor 상태를 표시하고 활성 패널마다 절대·상대
+위치 이동, press-and-hold CW/CCW JOG와 정상 감속 STOP을 제공한다. 위치 이동은 서버의
+전용 worker에서 Ophyd motor와 Bluesky RunEngine을 거쳐 실행하며 브라우저가 PV에 직접
+쓰지 않는다. JOG는 Ophyd JOGF/JOGR signal을 사용하고 실제 MOVN 전환을 확인한 뒤,
+해제할 때 같은 Ophyd STOP 경로를 사용한다. HOME, commissioning, 진단 또는 recovery
+명령은 아직 제공하지 않는다.
+
+이동 전에는 Enable·정지·limit 상태와 유한한 입력을 확인한다. 절대 입력은 목표 사용자
+좌표, 상대 입력은 현재 RBV에 더한 목표로 바꾼 뒤 현재 MRES 간격의 최근접 사용자
+좌표로 반올림하고 LLM/HLM을 검사한다. 입력 목표와 실행 목표가 다르면 완료 메시지에
+두 값과 최종 RBV를 함께 표시한다.
+
+브라우저와 backend는 영구 WebSocket을 유지하고, panel별 영구 Ophyd motor가 EPICS
+monitor callback으로 상태를 push한다. 반복 polling과 운전용 `caget/caput` HTTP 경로는
+없다. 이동이나 JOG 중 위치와 motion/limit 상태도 monitor 변경 시 즉시 전달된다.
+간편 패널에도 절대 목표 입력을 제공한다. 기본·상세 패널은 motorx_all을
+참고한 속도, JOG, limit, backlash, retry와 좌표 설정 field를 편집할 수 있으며, 서버의
+allowlist와 readback 검증을 거친다. 좌표 변환 field는 SET=Set에서만 변경할 수 있다.
+숫자 field는 Enter, enum field는 선택 변경으로 즉시 적용되며 배경색으로 수정·적용 중·
+성공·실패 상태를 구분한다. UEIP/URIP encoder 선택도 제공하고, backlash는 별도 스위치
+대신 BDST=0일 때 비활성으로 취급한다.
+
+브라우저 WebSocket이 끊기면 backend가 그 연결이 소유한 동작 축에 STOP을 보낸다. launcher에서
+Ctrl-C를 누르면 자식 프로세스가 신호를 동시에 받지 않으며 GUI의 진행 중 요청과 축
+Disable·assignment 저장을 마친 뒤 IOC를 종료한다.
+
+launcher 터미널에는 IOC, stage apply, GUI와 launcher 출력을 각각 `[IOC]`, `[APPLY]`,
+`[GUI]`, `[LAUNCHER]`로 표시해 실시간 출력한다. 실행별 디렉터리에는 각 원본 로그와
+시간순으로 합친 `session.log`를 정상·실패 종료 모두 보존한다. 마지막 실행은 다음처럼
+확인할 수 있다.
+
+```bash
+less logs/kohzu-control/latest/session.log
+tail -F logs/kohzu-control/latest/session.log
+```
+
+FIFO는 `/tmp/kohzu-control-runtime.*`에서만 생성하며 종료 시 항상 삭제한다. 운영 로그
+디렉터리는 `.gitignore` 대상이고 현재는 자동 보존 기간이나 개수 제한을 두지 않는다.
 
 패널 삭제나 다른 모델 할당에서도 `direction`, `sensors`, `home_method`는 모델이 아닌
 축 설치 고유 설정이므로 보존된다. 다른 종류의 모델로 교체할 때 이 값들이 새 모델에

@@ -35,17 +35,24 @@
           <p class="record"></p>
           <h2></h2>
         </div>
-        <button class="remove">삭제</button>
+        <div class="panel-actions">
+          <button type="button" class="stop">STOP</button>
+          <button class="remove">삭제</button>
+        </div>
       </div>
       <div class="compact-row">
         <span class="compact-axis"></span>
         <strong class="compact-position">—</strong>
         <span class="compact-unit"></span>
         <span class="compact-state" aria-label="축 상태"></span>
-        <div class="compact-controls" title="STOP/JOG는 다음 개발 단계에서 활성화됩니다">
-          <button type="button" disabled>CCW</button>
-          <button type="button" class="stop" disabled>STOP</button>
-          <button type="button" disabled>CW</button>
+        <div class="compact-controls" title="누르고 있는 동안 JOG, 놓으면 STOP">
+          <button type="button" class="jog" data-direction="ccw">CCW</button>
+          <button type="button" class="stop">STOP</button>
+          <button type="button" class="jog" data-direction="cw">CW</button>
+        </div>
+        <div class="compact-target">
+          <input class="compact-absolute-value" type="number" step="any" inputmode="decimal" aria-label="절대 목표">
+          <button type="button" class="compact-move-absolute">이동</button>
         </div>
       </div>
       <dl class="status-grid">
@@ -62,8 +69,70 @@
         <dt class="detail-only">OFF / FOFF</dt><dd class="offset detail-only">—</dd>
         <dt class="detail-only">VBAS / ACCL</dt><dd class="motion-config detail-only">—</dd>
         <dt class="detail-only">MSTA</dt><dd class="msta detail-only">—</dd>
+        <dt class="detail-only">SET mode</dt><dd class="set-mode detail-only">—</dd>
+        <dt class="detail-only">SPMG mode</dt><dd class="spmg-mode detail-only">—</dd>
         <dt class="detail-only">Origin method</dt><dd class="origin-method detail-only">—</dd>
       </dl>
+      <div class="motion-controls">
+        <label>절대 목표
+          <input class="absolute-value" type="number" step="any" inputmode="decimal">
+        </label>
+        <button type="button" class="move-absolute">절대 이동</button>
+        <label>상대 이동량
+          <input class="relative-value" type="number" step="any" inputmode="decimal">
+        </label>
+        <button type="button" class="move-negative">− 이동</button>
+        <button type="button" class="move-positive">+ 이동</button>
+        <p class="motion-message" role="status"></p>
+      </div>
+      <section class="field-controls basic-fields" aria-label="기본 motor 설정">
+        <h3>기본 motor 설정</h3>
+        <div class="field-grid">
+          <label>이동 속도 VELO <input data-field=".VELO" type="number" step="any"></label>
+          <label>이동 시간 ACCL <input data-field=".ACCL" type="number" step="any"></label>
+          <label>JOG 속도 JVEL <input data-field=".JVEL" type="number" step="any"></label>
+          <label>JOG 가속도 JAR <input data-field=".JAR" type="number" step="any"></label>
+          <label>상대 간격 TWV <input data-field=".TWV" type="number" step="any"></label>
+          <label>낮은 리미트 LLM <input data-field=".LLM" type="number" step="any"></label>
+          <label>높은 리미트 HLM <input data-field=".HLM" type="number" step="any"></label>
+        </div>
+        <button type="button" class="apply-basic-fields">변경값 적용</button>
+        <p class="field-message" role="status"></p>
+      </section>
+      <section class="field-controls detail-only" aria-label="상세 motor 설정">
+        <h3>상세 운전 설정</h3>
+        <div class="field-grid">
+          <label>기저 속도 VBAS <input data-field=".VBAS" type="number" step="any"></label>
+          <label>최대 속도 VMAX <input data-field=".VMAX" type="number" step="any"></label>
+          <label>HOME 속도 HVEL <input data-field=".HVEL" type="number" step="any"></label>
+          <label>Backlash 거리 BDST <input data-field=".BDST" type="number" step="any"></label>
+          <label>Backlash 속도 BVEL <input data-field=".BVEL" type="number" step="any"></label>
+          <label>Backlash 시간 BACC <input data-field=".BACC" type="number" step="any"></label>
+          <label>Retry deadband RDBD <input data-field=".RDBD" type="number" step="any"></label>
+          <label>Retry 횟수 RTRY <input data-field=".RTRY" type="number" step="1"></label>
+          <label>정착 지연 DLY <input data-field=".DLY" type="number" step="any"></label>
+          <label>이동 fraction FRAC <input data-field=".FRAC" type="number" step="any"></label>
+        </div>
+        <button type="button" class="apply-detail-fields">변경값 적용</button>
+        <h3>좌표 설정</h3>
+        <p class="coordinate-warning">OFF/MRES/DIR/FOFF 변경은 SET=Set에서만 허용되며 좌표와 소프트 리미트의 의미를 바꿉니다.</p>
+        <div class="field-grid">
+          <label>SET <select data-field=".SET"><option>Use</option><option>Set</option></select></label>
+          <label>SPMG <select data-field=".SPMG"><option>Stop</option><option>Pause</option><option>Move</option><option>Go</option></select></label>
+          <label>방향 DIR <select data-field=".DIR"><option>Pos</option><option>Neg</option></select></label>
+          <label>Offset mode FOFF <select data-field=".FOFF"><option>Variable</option><option>Frozen</option></select></label>
+          <label>Offset OFF <input data-field=".OFF" type="number" step="any"></label>
+          <label>분해능 MRES <input data-field=".MRES" type="number" step="any"></label>
+          <label>표시 자릿수 PREC <input data-field=".PREC" type="number" step="1"></label>
+          <label>회전당 단위 UREV <input data-field=".UREV" type="number" step="any"></label>
+          <label>회전당 step SREV <input data-field=".SREV" type="number" step="any"></label>
+          <label>Encoder ERES <input data-field=".ERES" type="number" step="any"></label>
+          <label>Readback RRES <input data-field=".RRES" type="number" step="any"></label>
+          <label>Encoder 사용 UEIP <select data-field=".UEIP"><option>No</option><option>Yes</option></select></label>
+          <label>RDBL link 사용 URIP <select data-field=".URIP"><option>No</option><option>Yes</option></select></label>
+        </div>
+        <button type="button" class="apply-coordinate-fields">변경값 적용</button>
+      </section>
       <p class="connection-state">상태 읽는 중…</p>
       <p class="note">삭제하면 축을 Disable하고 저장된 모델 할당도 제거합니다.</p>
     </article>

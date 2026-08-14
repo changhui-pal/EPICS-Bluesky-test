@@ -24,8 +24,14 @@ class FakeChannelAccess:
         self.writes = []
 
     def get(self, pv, numeric_enum=False):
-        del numeric_enum
-        return self.values[pv]
+        value = self.values[pv]
+        if numeric_enum:
+            enums = {
+                "Enable": "0", "Disable": "1", "Use": "0", "Set": "1",
+                "Stop": "0", "Pause": "1", "Move": "2", "Go": "3",
+            }
+            return enums.get(value, value)
+        return value
 
     def put(self, pv, value):
         self.writes.append((pv, value))
@@ -59,19 +65,46 @@ class StageConfigApplyTest(unittest.TestCase):
 
     def test_basic_apply_writes_only_model_fields(self):
         plan = APPLY.AxisPlan(1, "TEST", (("MRES", "0.001"),))
-        client = FakeChannelAccess({"TEST:m1_able": "1"})
+        client = FakeChannelAccess({
+            "TEST:m1_able": "1", "TEST:m1.SET": "Use",
+            "TEST:m1.SPMG": "Go",
+        })
         APPLY.apply_plans(client, "TEST:", [plan])
         self.assertEqual(client.writes, [
+            ("TEST:m1.SET", "Set"),
+            ("TEST:m1_able", "Enable"),
             ("TEST:m1.MRES", "0.001"),
+            ("TEST:m1.SET", "Use"),
+            ("TEST:m1_able", "Disable"),
             ("TEST:m1_able", "0"),
         ])
 
     def test_disabled_assignment_remains_disabled(self):
         plan = APPLY.AxisPlan(
             1, "TEST", (("MRES", "0.001"),), enabled=False)
-        client = FakeChannelAccess({"TEST:m1_able": "1"})
+        client = FakeChannelAccess({
+            "TEST:m1_able": "1", "TEST:m1.SET": "Use",
+            "TEST:m1.SPMG": "Go",
+        })
         APPLY.apply_plans(client, "TEST:", [plan])
-        self.assertEqual(client.writes, [("TEST:m1.MRES", "0.001")])
+        self.assertEqual(client.writes[-2:], [
+            ("TEST:m1.SET", "Use"),
+            ("TEST:m1_able", "Disable"),
+        ])
+
+    def test_apply_failure_always_restores_disable(self):
+        plan = APPLY.AxisPlan(1, "TEST", (("MRES", "not-a-number"),))
+        client = FakeChannelAccess({
+            "TEST:m1_able": "1", "TEST:m1.SET": "Use",
+            "TEST:m1.SPMG": "Go",
+        })
+
+        with self.assertRaisesRegex(ValueError, "readback"):
+            APPLY.apply_plans(client, "TEST:", [plan])
+
+        self.assertEqual(client.values["TEST:m1_able"], "Disable")
+        self.assertEqual(client.values["TEST:m1.SET"], "Use")
+        self.assertEqual(client.values["TEST:m1.SPMG"], "Go")
 
 
 if __name__ == "__main__":

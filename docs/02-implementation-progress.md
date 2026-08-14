@@ -3,6 +3,26 @@
 이 문서는 코드 구현과 검증 범위를 단계별로 기록한다. 향후 각 구현 단계가 끝날 때
 변경 파일, 구현 기능, 의도적으로 제외한 기능 및 시험 결과를 추가한다.
 
+## 2026-08-14: GUI 첫 이동의 좌표·소프트 리미트 이동 수정
+
+실제 GUI 시험에서 축 2, 5, 4의 첫 절대 위치 요청 시 motor record가 각각
+`setPosition(4000)`, `setPosition(-500)`, `setPosition(-3139.717425)`을 요청하고 driver가
+거부한 로그를 확인했다. 원인은 `_able=Disable`의 SDIS 아래에서 쓴 MRES가 marked 상태로
+남아 첫 이동 process에서 `LOAD_POS`로 처리된 것이었다. `FOFF=Variable`인 motor record는
+그 과정에서 OFF를 다시 계산하고 사용자 LLM/HLM을 같은 좌표 변환량만큼 옮겼다.
+
+모델 적용을 `Disable 확인 -> SET=Set -> 임시 process 허용 -> 필드 적용/검증 -> 기존 SET
+복원 -> Disable 복원 -> 요청된 최종 Enable`의 축별 transaction으로 변경했다. SPMG는
+쓰지 않아 STP를 발생시키지 않는다. mock 검증 결과 모델 적용 중 WRP, APS/RPS, FRP,
+ORG, WTB, WSY, STP, REM이 없었고, GUI의 첫 절대 0 이동 전후 OFF/LLM/HLM이 동일했으며
+그 뒤 절대 이동도 정상 완료했다.
+
+이 오류가 실제 장비에서 발생한 축 2, 5, 4의 원점은 현재 보장되지 않는 것으로
+취급한다. 이번 수정 과정에서는 세 축에 HOME, ORG 또는 이동을 실행하지 않았다. GUI
+기본 기능 구현을 마친 뒤 기존 초기 설정과 동일하게 축 2는 Method 4, 축 5는 Method 10,
+축 4는 Method 4 절차로 원점을 다시 확립한다. 실행 시에는 당시 장비 상태와 Method 10의
+기준점 선택을 사용자가 다시 확인한다.
+
 ## 2026-08-01: 요구사항 및 프로토콜 분석
 
 - ARIES/LYNX와 TITAN-A2 매뉴얼을 분석했다.
@@ -64,7 +84,8 @@
 가상 서버는 로컬에서 한 IOC 연결만 받고 초기에는 `IDN`과 `RAX`에 응답하도록
 작성했다. 이후 읽기 전용 축 명령과 비구동 `STP` 검증을 단계별로 추가했다. `IDN`
 응답 전에 `W SYS 52`를 보내 비동기 이벤트가 transaction 응답을 방해하지 않는지
-확인한다. 가상 서버는 모터 이동을 시작하는 명령을 구현하지 않는다.
+확인한다. 이 최초 단계에서는 가상 서버가 모터 이동 명령을 구현하지 않았고, 이후 GUI
+end-to-end 시험을 위해 APS/RPS와 시간 기반 위치·구동 상태 모사를 추가했다.
 
 통합 시험의 성공 조건:
 
@@ -101,6 +122,11 @@ Mock 확장:
 
 - 이동, jog, home 및 set-position 명령
 - 실제 ARIES 접속
+
+2026-08-14 GUI 통합시험에서는 mock APS/RPS가 명령 즉시 최종 위치로 바뀌는 대신
+정해진 시험 시간 동안 중간 pulse 위치와 `STR drive=1`을 반환하고, 완료 후 정확한 목표와
+`drive=0`을 반환하도록 확장했다. `STP/0`은 그 시점의 보간 위치에서 정지시킨다. 이로써
+Ophyd가 관찰하는 `MOVN/DMOV/RBV` 순서가 실제 controller의 비동기 이동에 가까워졌다.
 
 ## 2026-08-03: Generic motor record 연결
 
@@ -1026,3 +1052,61 @@ GUI의 loopback 전용 제한은 제거했으며 기본값은 여전히 `127.0.0
 신뢰 네트워크 전용이라는 경고를 출력한다. tests의 loopback endpoint와 과거 축별
 hardware-test `.cmd`는 운영 설정이 아니라 격리 fixture와 시험 기록이므로 변경하지
 않았다.
+
+## 2026-08-14: GUI 정상 STOP
+
+활성 패널에만 허용되는 `POST /api/panels/<axis>/stop` API와 기본·간편 보기 STOP 버튼을
+추가했다. 서버는 표준 motor record의 `.STOP`에 `1`을 쓰며 assignment와 `_able` 상태는
+변경하지 않는다. 기존 드라이버가 이 요청을 controller의 정상 감속
+`STP<axis>/0`으로 변환하므로 GUI가 controller protocol을 직접 다루지 않는다. 존재하지
+않는 패널의 STOP은 거부하고 CCW/CW JOG 및 위치 이동은 계속 비활성이다.
+
+GUI의 1초 상태 polling이 정상 HTTP access log를 계속 생성하던 동작을 정리했다. 성공한
+GET polling과 정적 파일 요청은 생략하고 최초 상태 연결, 연결 실패·복구, 이동
+시작·종료, Enable/DMOV/limit 변화와 패널 생성·삭제·STOP만 의미 로그로 남긴다. RBV는
+매 polling 변화를 기록하지 않고 이동 상태가 바뀌는 시점에만 함께 기록한다.
+
+실제 launcher 종료 로그에서 브라우저가 취소한 polling 응답의 `BrokenPipeError`를 다시
+503으로 보내려는 이중 예외와, Ctrl-C가 IOC·GUI에 동시에 전달되어 GUI Disable 전에 IOC
+PV가 사라지는 경쟁을 확인했다. 닫힌 client socket은 정상 취소로 처리하고 HTTP request
+thread 완료 후 cleanup하도록 변경했다. launcher 자식은 SIGINT를 무시하고 launcher가
+GUI SIGTERM·cleanup 완료 후 IOC `exit` 순서를 통제한다. 정상 Ctrl-C는 성공 종료로
+취급한다.
+
+이후 정상 실행의 작업 이력도 확인할 수 있도록 임시 로그 삭제 정책을 영구 실행 로그로
+교체했다. `logs/kohzu-control/<시각>-<PID>/`에 IOC, stage apply, GUI, launcher 원본과
+timestamp/source가 붙은 통합 `session.log`를 저장하고 `latest` symlink를 갱신한다.
+동일 통합 로그는 launcher 터미널에도 실시간 출력한다. FIFO만 `/tmp`에서 사용 후 항상
+삭제하며 로그 자동 rotation은 추후 실제 누적량을 보고 결정한다.
+
+사용자가 launcher를 실제 실행해 IOC 초기화, 1~5축 설정 적용·패널 복원, 축 6 생성·삭제,
+축 5 STOP과 Ctrl-C 종료를 확인했다. `20260814-140959-234380/session.log`에는 GUI 종료가
+IOC 종료보다 먼저 기록됐고 error/exception/503이 없으며 마지막 `Session completed`와
+프로세스 종료까지 정상이다.
+
+## 2026-08-14: GUI 절대·상대 위치 이동
+
+활성 패널에 절대 목표와 상대 이동량 입력을 추가했다. 서버는 Enable, DMOV/MOVN,
+HLS/LLS/LVIO와 유한값을 확인하고 현재 RBV 기준 MRES 격자의 최근접 목표를 Decimal
+반올림으로 계산한 뒤 LLM/HLM 범위를 검사한다. 상대 입력도 먼저 절대 사용자 목표로
+변환하므로 최종 실행 경로는 하나다.
+
+검사를 통과한 목표는 전용 worker thread가 소유한 Ophyd `SafeStopEpicsMotor`와 Bluesky
+`RunEngine`의 `mv` plan으로 직렬 실행한다. HTTP worker가 RunEngine을 직접 공유하지
+않으며 STOP은 생성된 Ophyd motor를 통해 진행 중 MoveStatus를 실패 완료한다. 브라우저는
+PV를 직접 쓰지 않고 요청값, 양자화된 목표와 최종 RBV를 표시한다. JOG와 HOME은 아직
+비활성이다.
+
+## 2026-08-14: persistent Ophyd/WebSocket 운전 경로
+
+표준 HTTP server, browser polling, 요청별 상태 `caget`과 운전 `caput` 경로를 제거했다.
+panel마다 연결된 `SafeStopEpicsMotor`와 PV subscription을 소유하는 `AxisSession`을
+유지한다. 모델 적용만 Ready 전 관리 transaction에서 공용 CA 적용기를 사용하며,
+Ready 이후 snapshot, field, JOG와 STOP은 같은 Ophyd 객체를 사용한다. 유한 이동은 그
+객체를 등록한 Bluesky RunEngine worker로 실행한다.
+
+browser는 WebSocket으로 monitor update와 명령 결과를 받는다. JOG 해제는 시작 응답을
+기다리지 않고 STOP을 전송하며 연결 단절 시 backend가 동작 축을 정지한다. legacy
+`/status`, `/move`, `/jog`, `/stop`, `/field` endpoint가 404임을 mock 시험에서 확인했다.
+numeric PV의 `as_string`/PREC 때문에 MRES가 0으로 잘리는 문제도 수정했다. 전체 결과는
+`112 passed, 7 subtests passed`이며 mock IOC/controller WebSocket end-to-end도 통과했다.
