@@ -21,6 +21,7 @@ ca_addr_list = 10.0.0.255
 listen = 0.0.0.0
 port = {gui_port}
 move_timeout = 180
+home_timeout = 300
 
 [python]
 executable = /opt/venv/bin/python
@@ -43,6 +44,7 @@ def test_runtime_config_reads_all_shared_values(tmp_path):
     assert config.gui_listen == "0.0.0.0"
     assert config.gui_port == 8080
     assert config.gui_move_timeout == 180
+    assert config.gui_home_timeout == 300
     assert config.python_executable == pathlib.Path("/opt/venv/bin/python")
     assert config.get("controller.host") == "controller.example"
 

@@ -100,6 +100,14 @@ function renderStatus(panel, values) {
   panel.querySelector(".spmg-mode").textContent = values[".SPMG"];
   panel.querySelector(".origin-method").textContent =
     `Method ${values[":OriginMethodSelectedRBV"]}`;
+  panel.querySelector(".home-method-state").textContent =
+    `선택값 ${values[":OriginMethodSelectedRBV"]} / Controller ${values[":OriginMethodRBV"]}`;
+  const homeMethod = panel.querySelector(".home-method");
+  const selectedMethod = Number(values[":OriginMethodSelectedRBV"]);
+  if (Number.isInteger(selectedMethod) && selectedMethod >= 1 && selectedMethod <= 15 &&
+      homeMethod.dataset.dirty !== "true" && document.activeElement !== homeMethod) {
+    homeMethod.value = String(selectedMethod);
+  }
   syncFieldInputs(panel, values);
   const connection = panel.querySelector(".connection-state");
   connection.textContent = "CA 연결됨";
@@ -250,6 +258,42 @@ async function moveAxis(axis, panel, mode, value) {
   }
 }
 
+async function setHomeMethod(axis, panel) {
+  const method = Number(panel.querySelector(".home-method").value);
+  const message = panel.querySelector(".home-message");
+  try {
+    const result = await command("set_home_method", axis, {method});
+    panel.querySelector(".home-method").dataset.dirty = "false";
+    message.className = "home-message success";
+    message.textContent = `Method ${result.home_method} 저장 완료`;
+  } catch (error) {
+    message.className = "home-message error";
+    message.textContent = `Method 저장 실패: ${error.message}`;
+  }
+}
+
+async function homeAxis(axis, panel) {
+  const method = Number(panel.querySelector(".home-method").value);
+  if (!window.confirm(`축 ${axis}을 Method ${method}로 HOME 실행할까요?`)) return;
+  const button = panel.querySelector(".home");
+  const message = panel.querySelector(".home-message");
+  button.disabled = true;
+  message.className = "home-message working";
+  message.textContent = `Method ${method} 적용 후 HOME 진행 중… STOP으로 중단할 수 있습니다.`;
+  try {
+    await command("set_home_method", axis, {method});
+    panel.querySelector(".home-method").dataset.dirty = "false";
+    const result = await command("home", axis);
+    message.className = "home-message success";
+    message.textContent = `HOME 완료: ${result.final} ${result.egu}`;
+  } catch (error) {
+    message.className = "home-message error";
+    message.textContent = `HOME 실패 또는 중단: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function markField(input, state) {
   input.classList.remove("field-dirty", "field-applying", "field-applied", "field-error");
   if (state) input.classList.add(`field-${state}`);
@@ -304,10 +348,20 @@ function addPanel(result) {
   if (existing) existing.remove();
 
   const panel = document.getElementById("panel-template").content.firstElementChild.cloneNode(true);
+  panel.querySelector(".home-controls").hidden = document.body.dataset.view === "compact";
   panel.querySelector("h2").textContent = `축 ${result.axis}`;
   panel.querySelector(".compact-axis").textContent = `축 ${result.axis}`;
   panel.querySelector(".record").textContent = result.record;
   panel.querySelector(".model-name").textContent = result.model;
+  const homeMethod = panel.querySelector(".home-method");
+  homeMethod.value = String(result.home_method || 4);
+  homeMethod.dataset.dirty = "false";
+  homeMethod.addEventListener("change", () => {
+    homeMethod.dataset.dirty = "true";
+  });
+  panel.querySelector(".set-home-method").onclick = () =>
+    setHomeMethod(result.axis, panel);
+  panel.querySelector(".home").onclick = () => homeAxis(result.axis, panel);
   for (const button of panel.querySelectorAll(".stop"))
     button.onclick = () => stopAxis(result.axis, panel);
   for (const button of panel.querySelectorAll(".jog"))
@@ -381,6 +435,8 @@ function addPanel(result) {
 function setView(view) {
   if (!VALID_VIEWS.has(view)) view = "basic";
   document.body.dataset.view = view;
+  for (const controls of document.querySelectorAll(".home-controls"))
+    controls.hidden = view === "compact";
   window.localStorage.setItem(VIEW_KEY, view);
   for (const button of document.querySelectorAll("[data-view]")) {
     const selected = button.dataset.view === view;
@@ -440,7 +496,7 @@ async function start() {
   for (const panel of configuration.panels) addPanel(panel);
   await connectSocket();
   document.getElementById("connection").textContent =
-    `PV prefix ${configuration.prefix} · WebSocket/EPICS monitor 연결됨`;
+    `PV prefix ${configuration.prefix} · WebSocket/EPICS monitor 연결됨 · UI ${configuration.ui_version}`;
   window.addEventListener("blur", () => {
     for (const [axis] of activeJogs) {
       const panel = activePanels.get(axis);

@@ -78,6 +78,20 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .motion-controls label { display: grid; gap: 3px; font-size: .86rem; }
 .motion-controls input { width: 100%; box-sizing: border-box; padding: 7px; }
 .motion-message { grid-column: 1 / -1; min-height: 1.2em; margin: 0; font-size: .86rem; }
+.home-controls {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #dbe3ea;
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) auto auto;
+  gap: 7px;
+  align-items: end;
+}
+.home-controls[hidden] { display: none !important; }
+.home-controls h3, .home-controls p { grid-column: 1 / -1; margin: 3px 0; }
+.home-controls label { display: grid; gap: 3px; font-size: .86rem; }
+.home-warning { color: #805500; font-size: .82rem; }
+.home-message { min-height: 1.2em; font-size: .86rem; }
 .field-controls {
   margin-top: 12px;
   padding-top: 10px;
@@ -105,6 +119,7 @@ body[data-view="compact"] .creator,
 body[data-view="compact"] .panel-title,
 body[data-view="compact"] .status-grid,
 body[data-view="compact"] .motion-controls,
+body[data-view="compact"] .home-controls,
 body[data-view="compact"] .field-controls,
 body[data-view="compact"] .connection-state,
 body[data-view="compact"] .note { display: none; }

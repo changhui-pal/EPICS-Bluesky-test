@@ -61,11 +61,13 @@ coordinate_after="$("${epics_bin}/caget" -t -g 12 MOCK:m1.OFF MOCK:m1.LLM MOCK:m
 curl --silent --fail --request DELETE --header "X-Kohzu-Token: ${token}" \
     http://127.0.0.1:18080/api/panels/1 >/dev/null
 [[ "$("${epics_bin}/caget" -t -n MOCK:m1_able)" == "1" ]]
-python3 -c 'import configparser,sys; p=configparser.ConfigParser(); p.read(sys.argv[1]); assert not p["axis:1"].get("model", ""); assert not p["axis:1"].getboolean("enabled")' "${axes_file}"
+python3 -c 'import configparser,sys; p=configparser.ConfigParser(); p.read(sys.argv[1]); s=p["axis:1"]; assert not s.get("model", ""); assert not s.getboolean("enabled"); assert s.getint("home_method")==10' "${axes_file}"
 
 kill -TERM "${gui_pid}"
 wait "${gui_pid}" || true
 gui_pid=""
 [[ "$(grep -c '^RECEIVED FRP1/0/0$' "${server_log}" || true)" == "1" ]]
+[[ "$(grep -c '^RECEIVED WSY1/2/10$' "${server_log}" || true)" == "1" ]]
+[[ "$(grep -c '^RECEIVED ORG1/0/1$' "${server_log}" || true)" == "1" ]]
 if grep -Eq 'GET /api/panels/.+/(status|move|jog|field)' "${gui_log}"; then exit 1; fi
 echo "Persistent Ophyd/WebSocket GUI integration test passed"

@@ -41,6 +41,10 @@ class FakeSession:
         self.jogs = []
         self.stops = 0
         self.closed = False
+        self.homes = []
+        self.signals = {":OriginMethod": mock.Mock()}
+        self.signals[":OriginMethod"].get.side_effect = \
+            lambda **_kwargs: int(self.data.get(":OriginMethod", 4))
         self.update_callback = update_callback
         self.instances[axis] = self
 
@@ -49,11 +53,12 @@ class FakeSession:
         self.writes.append((suffix, value)); self.data[suffix] = str(value)
     def jog(self, forward): self.jogs.append(forward)
     def stop(self): self.stops += 1
+    def home(self, timeout): self.homes.append(timeout); self.data[".RBV"] = "0"
     def close(self): self.closed = True
 
 
 class FakeStore:
-    def __init__(self): self.items = {}
+    def __init__(self): self.items = {}; self.methods = {}
     def panels(self):
         return [{"axis": a, "model": m, "enabled": e}
                 for a, (m, e) in self.items.items()]
@@ -61,6 +66,8 @@ class FakeStore:
     def set_enabled(self, axis, enabled):
         self.items[axis] = (self.items[axis][0], enabled)
     def remove(self, axis): self.items.pop(axis)
+    def home_method(self, axis): return self.methods.get(axis, 4)
+    def set_home_method(self, axis, method): self.methods[axis] = method
 
 
 def manager():
@@ -97,7 +104,7 @@ def test_panel_lifecycle_connects_before_enable_and_reuses_motor():
     result = control.create(6, "RA04A-W01")
     session = FakeSession.instances[6]
     assert result["enabled"] is True
-    assert session.writes[0] == ("_able", "Enable")
+    assert session.writes[:2] == [(":OriginMethod", 4), ("_able", "Enable")]
     motion.register_motor.assert_called_once_with(6, session.motor)
     assert store.items[6] == ("RA04A-W01", True)
     assert control.delete(6)["enabled"] is False
@@ -125,6 +132,24 @@ def test_bluesky_move_uses_registered_session_motor():
     result = control.move(1, "absolute", 1.00126)
     motion.submit.assert_called_once_with(1, 1.0015)
     assert result["final"] == 1.0015
+
+
+def test_home_method_is_persistent_and_home_uses_same_session():
+    control, store, _ = manager(); control.create(1, "XA05A-L202")
+    session = FakeSession.instances[1]
+    assert control.set_home_method(1, 10) == {"axis": 1, "home_method": 10}
+    assert store.methods[1] == 10
+    result = control.home(1)
+    assert session.homes == [180.0]
+    assert result == {"axis": 1, "home_method": 10, "final": 0.0,
+                      "egu": "mm", "done": True}
+
+
+@pytest.mark.parametrize("method", [0, 16, 1.5, True])
+def test_home_method_rejects_out_of_range_or_non_integer(method):
+    control, _, _ = manager(); control.create(1, "XA05A-L202")
+    with pytest.raises(ValueError, match="1..15"):
+        control.set_home_method(1, method)
 
 
 def test_configuration_exposes_catalog_and_32_axes():

@@ -1110,3 +1110,16 @@ browser는 WebSocket으로 monitor update와 명령 결과를 받는다. JOG 해
 `/status`, `/move`, `/jog`, `/stop`, `/field` endpoint가 404임을 mock 시험에서 확인했다.
 numeric PV의 `as_string`/PREC 때문에 MRES가 0으로 잘리는 문제도 수정했다. 전체 결과는
 `112 passed, 7 subtests passed`이며 mock IOC/controller WebSocket end-to-end도 통과했다.
+
+## 2026-08-18: persistent Ophyd GUI HOME 복원
+
+기본 motor 제어기에 Origin Method 1~15 선택과 HOME을 추가했다. 선택값은
+`:OriginMethod` readback 확인 후 `axis-assignments.ini`의 `home_method`에 저장하며 panel
+생성 시 Enable 전에 다시 적용한다. 센서 기반 mask와 commissioning flag는 사용하지
+않고 선택 책임은 사용자에게 둔다.
+
+HOME은 WebSocket 장시간 명령과 persistent `SafeStopEpicsMotor.home()`의 `.HOMF` 경로를
+사용한다. driver의 기존 `STR/RSY/WSY/RSY/ORG` 검증을 재사용하며 MOVN/DMOV/RBV는 EPICS
+monitor로 표시한다. 같은 연결의 STOP은 HOME 대기 중에도 처리된다. mock 시험에서
+Method 10 저장, `WSY1/2/10`, `ORG1/0/1`, 최종 RBV 0과 panel 삭제 뒤 method 보존을
+확인했다.

@@ -434,8 +434,11 @@ GUI는 사용자·dial·raw 위치와 기본 motor 상태를 표시하고 활성
 위치 이동, press-and-hold CW/CCW JOG와 정상 감속 STOP을 제공한다. 위치 이동은 서버의
 전용 worker에서 Ophyd motor와 Bluesky RunEngine을 거쳐 실행하며 브라우저가 PV에 직접
 쓰지 않는다. JOG는 Ophyd JOGF/JOGR signal을 사용하고 실제 MOVN 전환을 확인한 뒤,
-해제할 때 같은 Ophyd STOP 경로를 사용한다. HOME, commissioning, 진단 또는 recovery
-명령은 아직 제공하지 않는다.
+해제할 때 같은 Ophyd STOP 경로를 사용한다. 각 panel은 Origin Method 1~15 선택과
+HOME을 제공한다. Method는 축 설치 설정으로 assignment에 보존되며 HOME은 persistent
+Ophyd motor의 `.HOMF`와 기존 driver SYS.2 확인·ORG 경로를 사용한다. 센서에 맞는 Method
+선택은 사용자가 책임지며 commissioning flag는 HOME gate로 사용하지 않는다.
+commissioning, 진단 또는 recovery 명령은 제공하지 않는다.
 
 이동 전에는 Enable·정지·limit 상태와 유한한 입력을 확인한다. 절대 입력은 목표 사용자
 좌표, 상대 입력은 현재 RBV에 더한 목표로 바꾼 뒤 현재 MRES 간격의 최근접 사용자

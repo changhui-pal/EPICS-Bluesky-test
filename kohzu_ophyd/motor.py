@@ -63,6 +63,12 @@ class SafeStopEpicsMotor(EpicsMotor):
     origin_method = Cpt(
         EpicsSignalRO, ":OriginMethodSelectedRBV", kind="omitted", auto_monitor=True
     )
+    origin_method_set = Cpt(
+        EpicsSignal, ":OriginMethod", kind="config", auto_monitor=True
+    )
+    origin_method_actual = Cpt(
+        EpicsSignalRO, ":OriginMethodRBV", kind="omitted", auto_monitor=True
+    )
 
     def __init__(self, *args, **kwargs):
         # A DMOV monitor may call _done_moving from another CA callback thread.

@@ -224,8 +224,7 @@ WRP 좌표 설정 명령도 발생하지 않는다.
 
 JOG는 위치 목표가 아니라 방향·속도 동작이다. pointerdown에서 시작하고 pointerup,
 pointercancel, pointer capture 상실, window blur와 visibility 변경에서 STOP한다. 빠른
-탭에서 STOP이 시작보다 먼저 도착하지 않도록 브라우저가 시작 응답 뒤에 해제를
-직렬화한다.
+탭은 같은 WebSocket의 순서를 이용해 시작 응답을 기다리지 않고 STOP을 바로 전송한다.
 
 서버는 Enable, SET=Use, SPMG=Go, 정지와 limit 상태를 확인하고 물리 CW/CCW를 DIR에 따라
 JOGF/JOGR로 변환한다. 시작 API는 Ophyd signal write가 처리되면 즉시 반환하여 짧은 탭의
@@ -236,7 +235,20 @@ pointerup STOP이 다음 IOC 상태 poll까지 기다리지 않게 한다. 해�
 램프 시간을 만들도록 `(default_velocity-base_velocity)/acceleration_time`으로 계산한다.
 mock end-to-end 시험에서 `JOGF -> WTB -> FRP(CW) -> MOVN -> STP/0` 경로를 확인했다.
 
-### E. 축별 저장 위치
+### E. Origin Method와 HOME — 구현 완료
+
+기본·상세 panel에서 Method 1~15를 사용자가 직접 선택한다. 선택값은 IOC의
+`:OriginMethod`에 쓰고 readback을 확인한 뒤 `axis-assignments.ini`의 `home_method`에
+저장한다. 센서 종류로 Method를 자동 제한하지 않으며 선택 책임은 사용자에게 있다.
+panel 생성과 GUI 재시작 시 저장된 Method를 Enable 전에 다시 적용한다.
+
+HOME은 같은 `AxisSession`의 Ophyd `motor.home("forward")`, 즉 `.HOMF`를 실행한다.
+driver의 기존 `STR → RSY(SYS.2) → 필요 시 WSY → RSY 재확인 → ORG` 경로를 재사용한다.
+진행 상태는 EPICS monitor로 표시하고 STOP으로 중단할 수 있다. timeout은
+`runtime.ini`의 `gui.home_timeout`에서 관리한다. commissioning flag와 개발용
+HomeStatus는 운전 gate로 사용하지 않는다.
+
+### F. 축별 저장 위치
 
 정렬 작업에서 자주 쓰는 단일 축 위치를 이름과 함께 여러 개 저장한다. 저장 파일은
 assignment와 분리된 `config/saved-positions.json`을 사용하고 원자적으로 갱신한다.
@@ -246,11 +258,11 @@ assignment와 분리된 `config/saved-positions.json`을 사용하고 원자적�
 limit 범위를 검사한다. 현재 GUI server 세션 이전의 저장값은 좌표계가 유지됐는지
 사용자 확인을 받는다. 좌표계 generation counter는 도입하지 않는다.
 
-### F. 전체 포즈와 후속 기능
+### G. 전체 포즈와 후속 기능
 
 축별 저장 위치가 검증된 뒤 활성 축 전체 포즈 저장과 다축 Bluesky 복귀를 추가한다.
 포함된 축 중 하나라도 호환성 검사를 통과하지 못하면 전체 이동을 거부한다. 이후 순서는
-운전 속도 변경, OriginMethod/HOME, 별도 5축 고정점 운동 패널, controller 진단 표시다.
+운전 속도 변경, 별도 5축 고정점 운동 패널, controller 진단 표시다.
 
 실제 오차 보정 UI는 측정 도구 또는 카메라 기반 측정 방법이 마련될 때까지 추가하지
 않는다.

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>KOHZU 축 제어 패널</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260818-home2">
 </head>
 <body>
   <header>
@@ -85,6 +85,33 @@
         <button type="button" class="move-positive">+ 이동</button>
         <p class="motion-message" role="status"></p>
       </div>
+      <section class="home-controls" aria-label="원점 복귀">
+        <h3>HOME</h3>
+        <label>Origin Method
+          <select class="home-method" aria-label="Origin Method">
+            <option value="1">Method 1</option>
+            <option value="2">Method 2</option>
+            <option value="3">Method 3</option>
+            <option value="4">Method 4</option>
+            <option value="5">Method 5</option>
+            <option value="6">Method 6</option>
+            <option value="7">Method 7</option>
+            <option value="8">Method 8</option>
+            <option value="9">Method 9</option>
+            <option value="10">Method 10</option>
+            <option value="11">Method 11</option>
+            <option value="12">Method 12</option>
+            <option value="13">Method 13</option>
+            <option value="14">Method 14</option>
+            <option value="15">Method 15</option>
+          </select>
+        </label>
+        <button type="button" class="set-home-method">Method 저장</button>
+        <button type="button" class="home">HOME 실행</button>
+        <p class="home-method-state">선택값 — / Controller —</p>
+        <p class="home-message" role="status"></p>
+        <p class="home-warning">센서와 배선에 맞는 Method 선택 책임은 사용자에게 있습니다.</p>
+      </section>
       <section class="field-controls basic-fields" aria-label="기본 motor 설정">
         <h3>기본 motor 설정</h3>
         <div class="field-grid">
@@ -137,6 +164,6 @@
       <p class="note">삭제하면 축을 Disable하고 저장된 모델 할당도 제거합니다.</p>
     </article>
   </template>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260818-home2"></script>
 </body>
 </html>

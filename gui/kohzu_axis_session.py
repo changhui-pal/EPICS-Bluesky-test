@@ -30,7 +30,9 @@ SIGNALS = {
     ".SREV": "steps_per_revolution", ".ERES": "encoder_resolution",
     ".RRES": "readback_resolution", ".UEIP": "use_encoder",
     ".URIP": "use_readback_link",
+    ":OriginMethod": "origin_method_set",
     ":OriginMethodSelectedRBV": "origin_method",
+    ":OriginMethodRBV": "origin_method_actual",
 }
 ENUM_LABELS = {
     "_able": ("Enable", "Disable"), ".DIR": ("Pos", "Neg"),
@@ -135,6 +137,12 @@ class AxisSession:
 
     def stop(self) -> None:
         self.motor.stop(success=False)
+
+    def home(self, *, timeout: float) -> None:
+        """Run the driver's normal HOMF path and wait for motor completion."""
+        with self.command_lock:
+            status = self.motor.home("forward", wait=False, timeout=timeout)
+        status.wait(timeout=timeout)
 
     def close(self) -> None:
         for signal, token in self._subscriptions:

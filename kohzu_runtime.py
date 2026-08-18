@@ -25,6 +25,7 @@ class RuntimeConfig:
     gui_listen: str
     gui_port: int
     gui_move_timeout: float
+    gui_home_timeout: float
     python_executable: pathlib.Path
 
     def get(self, key: str) -> str:
@@ -37,6 +38,7 @@ class RuntimeConfig:
             "gui.listen": self.gui_listen,
             "gui.port": str(self.gui_port),
             "gui.move_timeout": str(self.gui_move_timeout),
+            "gui.home_timeout": str(self.gui_home_timeout),
             "python.executable": str(self.python_executable),
         }
         try:
@@ -85,6 +87,7 @@ def load_runtime_config(path: pathlib.Path = DEFAULT_RUNTIME_PATH) -> RuntimeCon
         gui_listen=_text(parser, "gui", "listen"),
         gui_port=_port(parser, "gui", "port"),
         gui_move_timeout=_positive_float(parser, "gui", "move_timeout"),
+        gui_home_timeout=_positive_float(parser, "gui", "home_timeout"),
         python_executable=pathlib.Path(
             _text(parser, "python", "executable")
         ).expanduser(),

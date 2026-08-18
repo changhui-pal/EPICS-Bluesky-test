@@ -36,6 +36,7 @@ from kohzu_axis_session import AxisSession  # noqa: E402
 
 
 PREFIX_PATTERN = re.compile(r"^[A-Za-z0-9:_-]+$")
+GUI_ASSET_VERSION = "20260818-home2"
 ASSIGNMENT_HEADER = """# Persistent IOC axis slots and GUI panel assignments.
 # model present: restore this panel at the next GUI server start.
 # enabled true: the panel is active and the IOC axis is currently Enable.
@@ -144,6 +145,19 @@ class AssignmentStore:
         with self.lock:
             parser = self._read()
             parser[f"axis:{axis}"]["enabled"] = str(enabled).lower()
+            self._write(parser)
+
+    def home_method(self, axis: int) -> int:
+        with self.lock:
+            parser = self._read()
+            return parser[f"axis:{axis}"].getint("home_method", fallback=4)
+
+    def set_home_method(self, axis: int, method: int) -> None:
+        if not 1 <= method <= 15:
+            raise ValueError("HOME method must be within 1..15")
+        with self.lock:
+            parser = self._read()
+            parser[f"axis:{axis}"]["home_method"] = str(method)
             self._write(parser)
 
     def remove(self, axis: int) -> None:
@@ -285,10 +299,11 @@ class PanelManager:
     """Own persistent panel sessions and serialize each axis's commands."""
 
     def __init__(self, store, applicator, motion=None, *, session_factory=None,
-                 update_callback=None):
+                 update_callback=None, home_timeout=180.0):
         self.store, self.applicator, self.motion = store, applicator, motion
         self.session_factory = session_factory or AxisSession
         self.update_callback = update_callback
+        self.home_timeout = home_timeout
         self.lock = threading.RLock()
         self.active = {}
         self.sessions = {}
@@ -313,9 +328,12 @@ class PanelManager:
         session = self.session_factory(
             axis, self.applicator.prefix, update_callback=self.update_callback)
         try:
+            method = self.store.home_method(axis)
+            session.put(":OriginMethod", method)
             session.put("_able", "Enable")
             self.store.assign(axis, model, enabled=True)
             result["enabled"] = True
+            result["home_method"] = method
             self.sessions[axis], self.active[axis] = session, result
             if self.motion is not None:
                 self.motion.register_motor(axis, session.motor)
@@ -410,6 +428,61 @@ class PanelManager:
             session.put(suffix, requested)
         return {"axis": axis, "field": suffix, "requested": requested}
 
+    def set_home_method(self, axis, method):
+        if isinstance(method, bool) or not isinstance(method, int) \
+                or not 1 <= method <= 15:
+            raise ValueError("HOME method must be an integer within 1..15")
+        session = self._session(axis)
+        with session.command_lock:
+            status = session.snapshot()
+            if axis in self.moving_axes or axis in self.jogging_axes or \
+                    self._is_on(status[".MOVN"]):
+                raise ValueError(f"axis {axis}: must be stopped to select HOME method")
+            session.put(":OriginMethod", method)
+            actual = int(session.signals[":OriginMethod"].get(use_monitor=False))
+            if actual != method:
+                raise ValueError(
+                    f"axis {axis}: HOME method readback {actual} != {method}")
+            self.store.set_home_method(axis, method)
+            self.active[axis]["home_method"] = method
+        self._log(axis, f"HOME method selected={method}")
+        return {"axis": axis, "home_method": method}
+
+    def home(self, axis):
+        session = self._session(axis)
+        with session.command_lock:
+            status = session.snapshot()
+            if axis in self.moving_axes or axis in self.jogging_axes:
+                raise ValueError(f"axis {axis}: a motion request is already active")
+            if status["_able"] not in {"Enable", "0"}:
+                raise ValueError(f"axis {axis}: axis is Disabled")
+            if status[".SET"] not in {"Use", "0"}:
+                raise ValueError(f"axis {axis}: HOME requires SET=Use")
+            if status[".SPMG"] not in {"Go", "3"}:
+                raise ValueError(f"axis {axis}: HOME requires SPMG=Go")
+            if status[".DMOV"] not in {"1", "Yes", "Done"} or \
+                    self._is_on(status[".MOVN"]):
+                raise ValueError(f"axis {axis}: must be stopped before HOME")
+            method = self.store.home_method(axis)
+            # Make the persisted installation choice authoritative even if an
+            # external client changed the IOC selection after panel creation.
+            session.put(":OriginMethod", method)
+            selected = int(session.signals[":OriginMethod"].get(use_monitor=False))
+            if selected != method:
+                raise ValueError(
+                    f"axis {axis}: HOME method readback {selected} != {method}")
+            self.moving_axes.add(axis)
+        self._log(axis, f"HOME started, method={method}")
+        try:
+            session.home(timeout=self.home_timeout)
+            final = session.snapshot()
+            self._log(axis, f"HOME completed, RBV={final['.RBV']} {final['.EGU']}")
+            return {"axis": axis, "home_method": method,
+                    "final": float(final[".RBV"]), "egu": final[".EGU"],
+                    "done": final[".DMOV"] in {"1", "Yes", "Done"}}
+        finally:
+            self.moving_axes.discard(axis)
+
     def delete(self, axis):
         with self.lock:
             session = self._session(axis)
@@ -487,18 +560,31 @@ def create_app(manager, gui_config, token):
 
     app = FastAPI(lifespan=lifespan)
 
+    @app.middleware("http")
+    async def disable_gui_asset_cache(request, call_next):
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.endswith(
+                (".html", ".js", ".css")):
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
     def authorize(value):
         if not value or not secrets.compare_digest(value, token):
             raise HTTPException(403, "invalid write token")
 
     @app.get("/")
     async def index():
-        return FileResponse(PROJECT / "gui" / "static" / "index.html")
+        return FileResponse(
+            PROJECT / "gui" / "static" / "index.html",
+            headers={"Cache-Control": "no-store, max-age=0"},
+        )
 
     @app.get("/api/config")
     async def config():
         return {**gui_config, "prefix": manager.applicator.prefix,
-                "token": token, "panels": manager.list()}
+                "token": token, "panels": manager.list(),
+                "ui_version": GUI_ASSET_VERSION}
 
     @app.post("/api/panels")
     async def create_panel(body: PanelRequest, x_kohzu_token: str = Header("")):
@@ -534,11 +620,14 @@ def create_app(manager, gui_config, token):
         background = set()
         controlled_axes = set()
 
-        async def run_move(command):
+        async def run_long_command(command):
             try:
-                result = await asyncio.to_thread(
-                    manager.move, command["axis"], command.get("mode"),
-                    command.get("value"))
+                if command["type"] == "move":
+                    result = await asyncio.to_thread(
+                        manager.move, command["axis"], command.get("mode"),
+                        command.get("value"))
+                else:
+                    result = await asyncio.to_thread(manager.home, command["axis"])
                 message = {"type": "command_result", "id": command.get("id"),
                            "result": result}
             except Exception as error:
@@ -547,11 +636,10 @@ def create_app(manager, gui_config, token):
             async with send_lock:
                 await websocket.send_json(message)
 
-        try:
-            while True:
-                command = await websocket.receive_json()
-                request_id = command.get("id")
-                kind, axis = command.get("type"), command.get("axis")
+        async def run_short_command(command):
+            request_id = command.get("id")
+            kind, axis = command.get("type"), command.get("axis")
+            try:
                 if not isinstance(axis, int):
                     raise ValueError("command axis must be an integer")
                 controlled_axes.add(axis)
@@ -565,27 +653,36 @@ def create_app(manager, gui_config, token):
                 elif kind == "stop":
                     result = await asyncio.to_thread(manager.stop, axis)
                     hub.jog_owners.pop(axis, None)
-                elif kind == "move":
-                    task = asyncio.create_task(run_move(dict(command)))
-                    background.add(task)
-                    task.add_done_callback(background.discard)
-                    continue
+                elif kind == "set_home_method":
+                    result = await asyncio.to_thread(
+                        manager.set_home_method, axis, command.get("method"))
                 elif kind == "field_write":
                     result = await asyncio.to_thread(
                         manager.write_field, axis, command.get("field"),
                         command.get("value"))
                 else:
                     raise ValueError(f"unsupported command {kind!r}")
-                async with send_lock:
-                    await websocket.send_json({"type": "command_result",
-                                               "id": request_id, "result": result})
+                message = {"type": "command_result", "id": request_id,
+                           "result": result}
+            except Exception as error:
+                message = {"type": "command_error", "id": request_id,
+                           "error": str(error)}
+            async with send_lock:
+                await websocket.send_json(message)
+
+        try:
+            while True:
+                command = await websocket.receive_json()
+                kind, axis = command.get("type"), command.get("axis")
+                if kind in {"move", "home"} and isinstance(axis, int):
+                    controlled_axes.add(axis)
+                    task = asyncio.create_task(run_long_command(dict(command)))
+                    background.add(task)
+                    task.add_done_callback(background.discard)
+                else:
+                    await run_short_command(command)
         except WebSocketDisconnect:
             pass
-        except Exception as error:
-            try: await websocket.send_json({"type": "command_error",
-                                            "id": command.get("id"),
-                                            "error": str(error)})
-            except Exception: pass
         finally:
             hub.clients.discard(websocket)
             owned = [a for a, owner in hub.jog_owners.items() if owner is websocket]
@@ -610,6 +707,8 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=runtime.gui_port)
     parser.add_argument("--move-timeout", type=float,
                         default=runtime.gui_move_timeout)
+    parser.add_argument("--home-timeout", type=float,
+                        default=runtime.gui_home_timeout)
     parser.add_argument("--prefix", default=runtime.epics_prefix)
     parser.add_argument("--models", type=pathlib.Path,
                         default=PROJECT / "config" / "stage-models.ini")
@@ -625,6 +724,8 @@ def main() -> int:
             raise ValueError("GUI port must be between 1 and 65535")
         if arguments.move_timeout <= 0:
             raise ValueError("GUI move timeout must be greater than zero")
+        if arguments.home_timeout <= 0:
+            raise ValueError("GUI HOME timeout must be greater than zero")
         if not PREFIX_PATTERN.fullmatch(arguments.prefix):
             raise ValueError("invalid PV prefix")
         gui_config = load_gui_configuration(arguments.models)
@@ -635,6 +736,7 @@ def main() -> int:
             AssignmentStore(arguments.axes, arguments.models), applicator,
             BlueskyMotionExecutor(
                 arguments.prefix, move_timeout=arguments.move_timeout),
+            home_timeout=arguments.home_timeout,
         )
         write_token = secrets.token_urlsafe(32)
         app = create_app(manager, gui_config, write_token)

@@ -16,6 +16,8 @@ async def main(url, token):
             {"type": "field_write", "axis": 1, "field": ".VELO", "value": 0.25},
             {"type": "move", "axis": 1, "mode": "absolute", "value": 0},
             {"type": "move", "axis": 1, "mode": "absolute", "value": 0.1},
+            {"type": "set_home_method", "axis": 1, "method": 10},
+            {"type": "home", "axis": 1},
             {"type": "jog_start", "axis": 1, "direction": "cw"},
             {"type": "jog_stop", "axis": 1},
         )
@@ -31,7 +33,9 @@ async def main(url, token):
                 break
         assert results[0]["requested"] == 0.25
         assert results[2]["target"] == 0.1 and results[2]["done"] is True
-        assert results[3]["forward"] is True
+        assert results[3]["home_method"] == 10
+        assert results[4]["home_method"] == 10 and results[4]["final"] == 0
+        assert results[5]["forward"] is True
 
 
 if __name__ == "__main__":
