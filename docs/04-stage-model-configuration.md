@@ -6,9 +6,9 @@ IOC에는 1~32축 motor record와 axis 객체를 계속 유지하고, GUI는 그
 패널만 생성하거나 삭제한다. 스테이지 모델 변경은 IOC 객체를 다시 만드는 작업이
 아니라 해당 축에 검증된 모델 설정을 적용하는 작업이다.
 
-시험 모델 5종의 공식 사양을 catalog에 등록했다. 1~5축에는 사용자가 제시한 순서로
-모델 이름만 임시 기입했으며 실제 배선 방향과 원점복귀 방법을 확인할 때까지 모든
-축은 disabled 상태다. 상세 근거는 `docs/05-test-stage-specifications.md`에 기록했다.
+시험 모델 5종의 공식 사양을 catalog에 등록했다. 실제 1~32축 할당과 활성 상태는 Git에서
+제외되는 로컬 설정에 보존하며, 추적되는 예제는 모든 축이 모델 없는 Disable 상태다.
+시험 모델의 상세 근거는 `docs/05-test-stage-specifications.md`에 기록했다.
 
 ## 파일
 
@@ -83,9 +83,10 @@ HOME Method를 허용하거나 거부하지 않는다. 사용자가 ARIES/LYNX m
 확인하여 Method 1~15 중 하나를 선택한다. 센서가 없는 축에서 현재 위치를 원점으로
 삼으려면 사용자가 Method 10을 선택할 수 있다.
 
-runtime에서는 축별 `OriginMethod` PV가 선택값을 보존한다. 1, 2, 4축은 4, 3축은
-10, 5축은 8로 초기화한다. HOME 요청 전에만 controller SYS.2를 선택값으로 맞추며 WSY 성공
-후 RSY readback까지 일치해야 ORG를 허용한다.
+runtime에서는 축별 `OriginMethod` PV가 선택값을 보존한다. 현재 시험 장비의 IOC 초기값은
+1, 2, 4축 Method 4와 3, 5축 Method 10이다. 로컬 assignment가 존재하면 GUI 패널 생성
+과정에서 저장된 축별 method를 적용한다. HOME 요청 전 controller SYS.2를 선택값으로
+맞추며 WSY 성공 후 RSY readback까지 일치해야 ORG를 허용한다.
 
 `iocBoot/iockohzuAriesLynx/applyConfiguredHomeMethods.cmd`는 초기 Method만 적용한다.
 초기 구현의 `OriginMethodMaskConfig`와 `AllowedHomeMethods`는 센서 mask를 강제하지
@@ -118,7 +119,7 @@ SYS.16을 변경하기 전에는 stage와 TITAN-A2의 허용 속도를 검토해
 ## 실행
 
 ```bash
-cd ~/Documents/codex-EPICS-control-test
+cd /path/to/EPICS-Bluesky-test
 python3 tools/validate_stage_config.py
 python3 -m unittest tests/test_stage_config_validator.py
 python3 tools/stage_config_dry_run.py
@@ -126,6 +127,42 @@ python3 -m unittest tests/test_stage_config_dry_run.py
 ```
 
 이 도구는 설정을 읽기만 하며 IOC PV 또는 controller에 값을 쓰지 않는다.
+
+## 모델 추가, 수정 및 삭제
+
+새 모델은 `config/stage-models.ini`에 고유한 `[model:NAME]` section으로 추가한다. 필수
+필드와 단위는 위의 모델 형식을 따르고, 제조사 최고속도를 검토 없이 기본속도로 사용하지
+않는다. 축에 할당할 때에는 로컬 `axis-assignments.ini`의 slot을 먼저 Disable 상태로
+작성한다.
+
+```ini
+[axis:6]
+enabled = false
+model = NEW_MODEL
+direction = Pos
+sensors = S2,L+,L-
+home_method = 4
+```
+
+모델을 수정한 뒤에는 참조 축 확인, validator, dry-run, IOC 적용, readback 확인과 저속
+방향·리미트·HOME 시험 순으로 재검증한다. 특히 `mres`, `direction`, limit 변경은 좌표나
+이동 방향에 영향을 준다.
+
+모델 삭제 전에는 참조를 먼저 찾는다.
+
+```bash
+rg -n "model = MODEL_TO_DELETE" config/axis-assignments.ini
+```
+
+참조 축을 `[axis:N] enabled=false`인 빈 slot으로 되돌린 다음 catalog section을 삭제한다.
+참조가 남은 모델 삭제는 validator가 거부한다. 변경 후 공통 검증은 다음과 같다.
+
+```bash
+python3 tools/validate_stage_config.py
+python3 tools/stage_config_dry_run.py
+python3 -m pytest -q tests/test_stage_config_validator.py \
+  tests/test_stage_config_apply.py
+```
 
 ## Dry-run motor record 보고서
 

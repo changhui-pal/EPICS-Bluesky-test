@@ -1135,3 +1135,14 @@ launcher는 로컬 파일이 없을 때만 예제를 복사하고 기존 파일�
 기존 장비의 실제 두 INI는 작업 폴더에 그대로 보존했다. 단위시험의 5축 전제는 별도
 fixture로 옮겨 개인 장비 설정에 의존하지 않게 했으며, 전체 Python 시험과 controller,
 stage apply, GUI WebSocket mock 통합시험을 통과했다.
+
+## 2026-08-18: README와 상세 문서 역할 분리
+
+623줄까지 누적된 README에서 EPICS 경로 상세, 수동 IOC 실행, 모델 생명주기, 고정점 실행
+예제, GUI 내부 동작과 과거 단계별 진행 설명을 분리했다. README는 프로젝트 목적과 구조,
+현재 구현 범위, 빠른 시작, 설정 파일 역할과 문서 탐색만 제공한다.
+
+빌드·launcher·종료 순서·로그 확인은 `docs/13-build-and-operation.md`로 옮겼고, 모델
+추가·수정·삭제 절차는 `docs/04-stage-model-configuration.md`에 통합했다. 환경 설치,
+GUI, 고정점 운동의 상세 내용은 기존 12, 06, 10번 문서로 연결한다. 오래된 저장소 절대
+경로와 축 5 Method 8 기록도 현재 Method 10 및 로컬 assignment 정책에 맞게 수정했다.
