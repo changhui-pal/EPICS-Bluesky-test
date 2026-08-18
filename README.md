@@ -56,9 +56,32 @@ ARIES/LYNX용 Model 3 드라이버
 - [`docs/09-ophyd-bluesky-integration-log.md`](docs/09-ophyd-bluesky-integration-log.md): 실제 IOC와 Ophyd/Bluesky의 단계별 연동 시험 기록
 - [`docs/10-fixed-point-kinematics.md`](docs/10-fixed-point-kinematics.md): 5축 고정점 운동의 이상적 기구 모델, 변환식 및 시험 계획
 - [`docs/11-python-module-roles.md`](docs/11-python-module-roles.md): `kohzu_kinematics`, `kohzu_ophyd`, `tools`의 파일별 역할과 호출 관계
+- [`docs/12-environment-setup.md`](docs/12-environment-setup.md): 운영·시험·개발 Python 환경과 EPICS 외부 의존성 재현
 - [`documents/stage-specifications/`](documents/stage-specifications/): KOHZU 공식 모델 사양 PDF와 검토용 추출문
 
 ## 새 환경에서 IOC 설정, 빌드 및 실행
+
+Python 패키지는 목적별로 분리되어 있다.
+
+```text
+requirements/runtime.txt  운영 GUI/Ophyd/Bluesky
+requirements/test.txt     runtime + 자동시험
+requirements/dev.txt      test + 개발 도구
+```
+
+개발 환경은 저장소 최상위에서 다음 명령으로 생성한다.
+
+```bash
+conda env create -f environment.dev.yml
+conda activate kohzu-dev
+python -m pip check
+ruff check .
+python -m pytest -q
+```
+
+운영 환경은 `environment.runtime.yml`을 사용한다. Python 이외의 EPICS Base, asyn,
+motor module과 Channel Access library 설치는 별도이며 상세 절차와 venv 대안은
+[`docs/12-environment-setup.md`](docs/12-environment-setup.md)를 따른다.
 
 ### 간편 실행
 

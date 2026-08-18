@@ -1,0 +1,10 @@
+# Python packages required to run the GUI and Ophyd/Bluesky control layer.
+# Tested together on Python 3.11 (2026-08-18):
+# ophyd 1.11.2, bluesky 1.15.1, pyepics 3.5.10, FastAPI 0.141.1,
+# Uvicorn 0.52.1 and websockets 17.0.1.
+ophyd>=1.11,<2
+bluesky>=1.15,<2
+pyepics>=3.5,<4
+fastapi>=0.141,<1
+uvicorn>=0.52,<1
+websockets>=17,<18

@@ -1,0 +1,3 @@
+# Runtime plus automated unit and mock-integration test dependencies.
+-r runtime.txt
+pytest>=9,<10

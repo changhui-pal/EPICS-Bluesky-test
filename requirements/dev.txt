@@ -1,0 +1,3 @@
+# Complete developer environment. Keep production installations on runtime.txt.
+-r test.txt
+ruff>=0.9,<1

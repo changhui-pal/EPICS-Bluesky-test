@@ -1,0 +1,8 @@
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# Start with errors that can indicate broken Python. Formatting and broad style
+# cleanup are intentionally deferred so introducing Ruff does not rewrite the
+# existing codebase in this dependency-only change.
+select = ["E9", "F63", "F7", "F82"]
