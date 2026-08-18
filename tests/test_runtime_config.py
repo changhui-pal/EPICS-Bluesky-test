@@ -49,6 +49,15 @@ def test_runtime_config_reads_all_shared_values(tmp_path):
     assert config.get("controller.host") == "controller.example"
 
 
+def test_tracked_runtime_example_is_valid_and_non_production():
+    project = pathlib.Path(__file__).resolve().parents[1]
+
+    config = load_runtime_config(project / "config" / "runtime.example.ini")
+
+    assert config.controller_host == "192.0.2.10"
+    assert str(config.python_executable).startswith("/path/to/")
+
+
 @pytest.mark.parametrize(
     ("gui_port", "prefix", "message"),
     [(0, "TEST:", "between 1 and 65535"),

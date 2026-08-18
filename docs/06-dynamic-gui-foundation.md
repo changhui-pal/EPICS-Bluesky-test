@@ -14,7 +14,7 @@
 - 기본·상세 패널의 allowlist motor field 편집과 readback 검증
 
 GUI는 FastAPI/Uvicorn backend와 브라우저의 HTML/CSS/JavaScript로 구성한다. 기본 bind는
-`127.0.0.1`이며 `config/runtime.ini` 또는 `--listen`으로 변경할 수 있다. 추가 GUI
+`127.0.0.1`이며 로컬 `config/runtime.ini` 또는 `--listen`으로 변경할 수 있다. 추가 GUI
 framework는 필요하지 않다.
 
 ## 패널 생성과 실제 적용

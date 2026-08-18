@@ -39,10 +39,19 @@ class FakeChannelAccess:
 
 
 class StageConfigApplyTest(unittest.TestCase):
+    def test_tracked_assignment_example_has_no_assigned_axes(self):
+        plans, warnings = APPLY.build_plans(
+            PROJECT / "config" / "stage-models.ini",
+            PROJECT / "config" / "axis-assignments.example.ini",
+            50000.0)
+        self.assertEqual(plans, [])
+        self.assertEqual(warnings, [])
+
     def test_project_plan_contains_five_assigned_disabled_axes(self):
         plans, warnings = APPLY.build_plans(
             PROJECT / "config" / "stage-models.ini",
-            PROJECT / "config" / "axis-assignments.ini", 50000.0)
+            PROJECT / "tests" / "fixtures" / "axis-assignments-five-axis.ini",
+            50000.0)
         self.assertEqual([plan.axis for plan in plans], [1, 2, 3, 4, 5])
         self.assertEqual(warnings, [])
         axis3 = dict(plans[2].fields)

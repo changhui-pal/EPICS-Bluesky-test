@@ -1123,3 +1123,15 @@ HOME은 WebSocket 장시간 명령과 persistent `SafeStopEpicsMotor.home()`의 
 monitor로 표시한다. 같은 연결의 STOP은 HOME 대기 중에도 처리된다. mock 시험에서
 Method 10 저장, `WSY1/2/10`, `ORG1/0/1`, 최종 RBV 0과 panel 삭제 뒤 method 보존을
 확인했다.
+
+## 2026-08-18: 예제와 로컬 장비 설정 분리
+
+컴퓨터·controller 고유 값이 든 `config/runtime.ini`와 현재 패널·축 상태를 보존하는
+`config/axis-assignments.ini`를 Git 추적에서 제외했다. 대신 안전한 문서용 controller
+주소와 Python 경로 자리표시자를 가진 `runtime.example.ini`, 모델이 없고 32축 모두
+Disable인 `axis-assignments.example.ini`를 추적한다.
+
+launcher는 로컬 파일이 없을 때만 예제를 복사하고 기존 파일은 절대 덮어쓰지 않는다.
+기존 장비의 실제 두 INI는 작업 폴더에 그대로 보존했다. 단위시험의 5축 전제는 별도
+fixture로 옮겨 개인 장비 설정에 의존하지 않게 했으며, 전체 Python 시험과 controller,
+stage apply, GUI WebSocket mock 통합시험을 통과했다.

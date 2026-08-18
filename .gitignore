@@ -10,6 +10,8 @@
 
 # Local configuration files
 /configure/*.local
+/config/runtime.ini
+/config/axis-assignments.ini
 
 # iocBoot generated files
 /iocBoot/*ioc*/cdCommands

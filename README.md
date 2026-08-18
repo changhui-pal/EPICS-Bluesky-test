@@ -100,9 +100,12 @@ axis assignment 적용과 GUI를 순서대로 시작할 수 있다.
 ./start_kohzu_control.sh --sudo
 ```
 
-controller 주소, EPICS prefix/bin/CA 주소, Python 실행 파일과 GUI listen/port의 기본값은
-[`config/runtime.ini`](config/runtime.ini)에 모여 있다. 모든 값은 launcher 옵션으로도
-일시적으로 덮어쓸 수 있으며 `./start_kohzu_control.sh --help`에서 목록을 볼 수 있다.
+controller 주소, EPICS prefix/bin/CA 주소, Python 실행 파일과 GUI listen/port의 실제 값은
+Git에서 제외되는 `config/runtime.ini`에 모여 있다. 추적되는
+[`config/runtime.example.ini`](config/runtime.example.ini)가 설정 형식을 제공하며, 로컬
+파일이 없으면 launcher가 예제를 한 번 복사한 뒤 사용자가 장비별 값을 입력하도록 한다.
+기존 로컬 파일은 덮어쓰지 않는다. 모든 값은 launcher 옵션으로도 일시적으로 덮어쓸 수
+있으며 `./start_kohzu_control.sh --help`에서 목록을 볼 수 있다.
 
 기본 브라우저 주소는 `http://127.0.0.1:8080`이다. 종료할 때 launcher 터미널에서 Ctrl-C를
 한 번 누르면 GUI가 먼저 활성 패널 축을 Disable하고 assignment를 저장한 뒤 IOC를
@@ -220,7 +223,9 @@ caget KOHZU:Diag:LastErrorCode
 
 32축 motor record는 substitutions로 항상 생성된다. 실제 모델 정보는
 [`config/stage-models.ini`](config/stage-models.ini)와
-[`config/axis-assignments.ini`](config/axis-assignments.ini)에서 관리한다.
+Git에서 제외되는 `config/axis-assignments.ini`에서 관리한다. 새 환경에서는 추적되는
+[`config/axis-assignments.example.ini`](config/axis-assignments.example.ini)가 32개
+Unconfigured/Disable slot을 제공하며 launcher가 로컬 파일이 없을 때 한 번 복사한다.
 
 먼저 controller에 쓰지 않는 검증과 dry-run을 실행한다.
 

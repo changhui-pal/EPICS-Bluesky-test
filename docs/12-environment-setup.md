@@ -54,6 +54,30 @@ python -m pytest -q
 확인하고 `config/runtime.ini`의 `[python] executable`을 그 값으로 바꾼다. 이 항목은
 장비별 런타임 설정이므로 Conda 환경을 활성화하는 것만으로 자동 변경되지는 않는다.
 
+## 로컬 장비 설정 초기화
+
+다음 두 실제 설정 파일은 컴퓨터 경로와 controller 정보, 현재 축 할당 상태를 포함하므로
+Git에서 제외된다.
+
+```text
+config/runtime.ini
+config/axis-assignments.ini
+```
+
+저장소에는 각각의 형식과 안전한 초기 상태를 담은 `runtime.example.ini`와
+`axis-assignments.example.ini`만 추적한다. `./start_kohzu_control.sh`는 로컬 파일이
+없을 때 예제를 한 번 복사하며 기존 파일은 덮어쓰지 않는다. IOC를 시작하기 전에
+`runtime.ini`의 controller 주소, EPICS 경로, Python 실행 파일을 수정하고 GUI 또는
+직접 편집으로 필요한 축 모델을 할당한다. 수동 초기화도 가능하다.
+
+```bash
+python3 tools/initialize_local_config.py
+```
+
+예제의 controller 주소 `192.0.2.10`은 문서용 주소이고 Python 경로도 자리표시자이므로
+수정하지 않은 상태에서는 운영 launcher의 필수 파일 검사를 통과하지 않는다. 축 할당
+예제는 모든 축이 `enabled=false`이고 모델이 없는 상태라 장비 설정을 적용하지 않는다.
+
 환경을 이미 만들었다면 다음처럼 갱신한다.
 
 ```bash

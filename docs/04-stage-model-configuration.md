@@ -13,7 +13,8 @@ IOC에는 1~32축 motor record와 axis 객체를 계속 유지하고, GUI는 그
 ## 파일
 
 - `config/stage-models.ini`: 재사용 가능한 스테이지 모델 catalog
-- `config/axis-assignments.ini`: 1~32번 persistent 축 slot과 현재 할당
+- `config/axis-assignments.example.ini`: Git에서 관리하는 1~32번 빈 축 slot 형식
+- `config/axis-assignments.ini`: Git에서 제외되는 현재 장비의 persistent 축 할당
 - `tools/validate_stage_config.py`: hardware와 무관한 read-only 검증기
 - `tools/stage_config_dry_run.py`: 적용될 값을 보여 주는 read-only 보고서
 - `tools/stage_config_apply.py`: 명시적 승인 옵션이 필요한 guarded IOC 적용 도구

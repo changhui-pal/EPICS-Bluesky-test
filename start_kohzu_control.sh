@@ -17,6 +17,12 @@ for argument in "$@"; do
     previous="${argument}"
 done
 
+# Keep machine/controller state out of Git. Missing local files are initialized
+# once from safe tracked examples and are never overwritten by the launcher.
+python3 "${project_dir}/tools/initialize_local_config.py" \
+    --runtime-target "${runtime_config}" \
+    --assignments-target "${project_dir}/config/axis-assignments.ini"
+
 runtime_get() {
     python3 "${project_dir}/tools/runtime_config.py" \
         --config "${runtime_config}" --get "$1"
